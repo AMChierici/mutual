@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block title %}Logged in — Mutual{% endblock %}
+{% block content %}
+<h1>Welcome back, {{ member.display_name }}.</h1>
+<p>You're signed in. <a href="/">Open the dashboard.</a></p>
+<form method="post" action="/auth/logout">
+    <button type="submit">Sign out</button>
+</form>
+{% endblock %}

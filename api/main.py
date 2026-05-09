@@ -1,16 +1,41 @@
-"""Mutual API entry point.
+"""Mutual API entry point."""
+from __future__ import annotations
 
-This is a stub. The full app — pools, members, contributions, claims, votes,
-payouts — is left for the first wave of contributors. See `docs/architecture.md`
-for the data model and `CONTRIBUTING.md` for how to pick up an issue.
-"""
+from contextlib import asynccontextmanager
+from pathlib import Path
+
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
+
+from api.db import make_engine, make_session_factory
+from api.routes_auth import router as auth_router
+
+WEB_DIR = Path(__file__).resolve().parent / "web"
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    engine = make_engine()
+    app.state.engine = engine
+    app.state.session_factory = make_session_factory(engine)
+    app.state.templates = Jinja2Templates(directory=str(WEB_DIR / "templates"))
+    try:
+        yield
+    finally:
+        engine.dispose()
+
 
 app = FastAPI(
     title="Mutual",
     description="Self-hosted infrastructure for mutual aid pools.",
     version="0.1.0",
+    lifespan=lifespan,
 )
+
+app.state.templates = Jinja2Templates(directory=str(WEB_DIR / "templates"))
+app.mount("/static", StaticFiles(directory=str(WEB_DIR / "static")), name="static")
+app.include_router(auth_router)
 
 
 @app.get("/")

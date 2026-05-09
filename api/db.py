@@ -7,10 +7,39 @@ is enabled on every connection.
 from __future__ import annotations
 
 import os
+from datetime import timezone
 from pathlib import Path
 
-from sqlalchemy import Engine, create_engine, event
+from sqlalchemy import DateTime, Engine, create_engine, event
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
+from sqlalchemy.types import TypeDecorator
+
+
+class UtcDateTime(TypeDecorator):
+    """DateTime that always reads/writes timezone-aware UTC datetimes.
+
+    SQLite (the default backend) stores datetimes as ISO strings without
+    timezone metadata, so a tz-aware ``datetime`` written to the DB comes
+    back naive on the next load. This decorator re-attaches UTC tzinfo on
+    load and rejects naive datetimes on insert.
+    """
+
+    impl = DateTime(timezone=True)
+    cache_ok = True
+
+    def process_bind_param(self, value, _dialect):
+        if value is None:
+            return None
+        if value.tzinfo is None:
+            raise ValueError(f"naive datetime is not allowed: {value!r}")
+        return value.astimezone(timezone.utc)
+
+    def process_result_value(self, value, _dialect):
+        if value is None:
+            return None
+        if value.tzinfo is None:
+            return value.replace(tzinfo=timezone.utc)
+        return value.astimezone(timezone.utc)
 
 
 class Base(DeclarativeBase):

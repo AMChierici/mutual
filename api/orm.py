@@ -16,7 +16,6 @@ from typing import Any
 
 from sqlalchemy import (
     JSON,
-    DateTime,
     Enum,
     ForeignKey,
     Integer,
@@ -25,7 +24,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
-from api.db import Base
+from api.db import Base, UtcDateTime
 
 
 def _utcnow() -> datetime:
@@ -84,7 +83,7 @@ class Pool(Base):
     name: Mapped[str] = mapped_column(String, nullable=False)
     currency: Mapped[str] = mapped_column(String, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=_utcnow, nullable=False
+        UtcDateTime, default=_utcnow, nullable=False
     )
     policy_template_id: Mapped[str | None] = mapped_column(String, nullable=True)
     governance_config: Mapped[dict[str, Any]] = mapped_column(
@@ -98,8 +97,9 @@ class Member(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     pool_id: Mapped[int] = mapped_column(ForeignKey("pools.id"), nullable=False)
     display_name: Mapped[str] = mapped_column(String, nullable=False)
+    email: Mapped[str | None] = mapped_column(String, nullable=True)
     joined_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=_utcnow, nullable=False
+        UtcDateTime, default=_utcnow, nullable=False
     )
     status: Mapped[MemberStatus] = _enum_col(
         MemberStatus, default=MemberStatus.invited, nullable=False
@@ -118,7 +118,7 @@ class Contribution(Base):
     amount: Mapped[int] = mapped_column(Integer, nullable=False)
     period: Mapped[str] = mapped_column(String(7), nullable=False)
     recorded_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=_utcnow, nullable=False
+        UtcDateTime, default=_utcnow, nullable=False
     )
     recorded_by: Mapped[int] = mapped_column(ForeignKey("members.id"), nullable=False)
 
@@ -133,9 +133,9 @@ class Claim(Base):
     category: Mapped[str] = mapped_column(String, nullable=False)
     description: Mapped[str] = mapped_column(Text, nullable=False)
     evidence_uris: Mapped[list[str]] = mapped_column(JSON, default=list, nullable=False)
-    occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    occurred_at: Mapped[datetime] = mapped_column(UtcDateTime, nullable=False)
     submitted_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=_utcnow, nullable=False
+        UtcDateTime, default=_utcnow, nullable=False
     )
     status: Mapped[ClaimStatus] = _enum_col(
         ClaimStatus, default=ClaimStatus.submitted, nullable=False
@@ -151,7 +151,7 @@ class Vote(Base):
     decision: Mapped[VoteDecision] = _enum_col(VoteDecision, nullable=False)
     reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     cast_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=_utcnow, nullable=False
+        UtcDateTime, default=_utcnow, nullable=False
     )
 
 
@@ -162,7 +162,7 @@ class Payout(Base):
     claim_id: Mapped[int] = mapped_column(ForeignKey("claims.id"), nullable=False)
     amount_paid: Mapped[int] = mapped_column(Integer, nullable=False)
     paid_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=_utcnow, nullable=False
+        UtcDateTime, default=_utcnow, nullable=False
     )
     recorded_by: Mapped[int] = mapped_column(ForeignKey("members.id"), nullable=False)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -178,7 +178,7 @@ class LedgerEntry(Base):
     delta: Mapped[int] = mapped_column(Integer, nullable=False)
     balance_after: Mapped[int] = mapped_column(Integer, nullable=False)
     recorded_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=_utcnow, nullable=False
+        UtcDateTime, default=_utcnow, nullable=False
     )
 
 
@@ -193,5 +193,42 @@ class AuditEvent(Base):
     kind: Mapped[str] = mapped_column(String, nullable=False)
     payload_json: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict, nullable=False)
     recorded_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=_utcnow, nullable=False
+        UtcDateTime, default=_utcnow, nullable=False
     )
+
+
+# ---------------------------------------------------------------------------
+# Auth (added in step 2; not in docs/architecture.md data model section but
+# implied by "Sessions are server-side, stored in DB. No passwords.")
+# ---------------------------------------------------------------------------
+class LoginToken(Base):
+    """Single-use magic-link token for activating an auth session."""
+
+    __tablename__ = "login_tokens"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    member_id: Mapped[int] = mapped_column(ForeignKey("members.id"), nullable=False)
+    token: Mapped[str] = mapped_column(String(64), unique=True, index=True, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        UtcDateTime, default=_utcnow, nullable=False
+    )
+    expires_at: Mapped[datetime] = mapped_column(UtcDateTime, nullable=False)
+    used_at: Mapped[datetime | None] = mapped_column(UtcDateTime, nullable=True)
+
+
+class AuthSession(Base):
+    """Server-side session keyed by an opaque cookie token."""
+
+    __tablename__ = "auth_sessions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    member_id: Mapped[int] = mapped_column(ForeignKey("members.id"), nullable=False)
+    token: Mapped[str] = mapped_column(String(64), unique=True, index=True, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        UtcDateTime, default=_utcnow, nullable=False
+    )
+    expires_at: Mapped[datetime] = mapped_column(UtcDateTime, nullable=False)
+    last_seen_at: Mapped[datetime] = mapped_column(
+        UtcDateTime, default=_utcnow, nullable=False
+    )
+    revoked_at: Mapped[datetime | None] = mapped_column(UtcDateTime, nullable=True)
