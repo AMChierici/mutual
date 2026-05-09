@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}New claim — Mutual{% endblock %}
+{% block content %}
+<h1>Submit a claim</h1>
+<p>Photos help. Anything ambiguous, write it in the description.</p>
+
+<form method="post" action="/claims" enctype="multipart/form-data">
+    <p><label>Amount ({{ currency }})<br>
+        <input type="number" step="0.01" min="0" name="amount_dollars" required></label></p>
+
+    <p><label>Category<br>
+        <input list="categories" name="category" required>
+        <datalist id="categories">
+            <option value="medical">
+            <option value="dental">
+            <option value="vision">
+            <option value="transport">
+            <option value="equipment">
+            <option value="other">
+        </datalist>
+    </label></p>
+
+    <p><label>Description<br>
+        <textarea name="description" rows="5" cols="60" required
+                  placeholder="What happened, what was bought, anything else useful."></textarea></label></p>
+
+    <p><label>Date of expense<br>
+        <input type="date" name="occurred_date" value="{{ today }}" required></label></p>
+
+    <p><label>Evidence (optional, up to {{ max_files }} images, {{ max_file_mb }} MB each)<br>
+        <input type="file" name="photos" multiple accept="image/*"></label></p>
+
+    <button type="submit">Submit claim</button>
+</form>
+
+<p><a href="/claims">Back to claim list</a></p>
+{% endblock %}

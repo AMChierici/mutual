@@ -70,7 +70,17 @@ async def client(app_with_db) -> AsyncIterator[AsyncClient]:
 # ---------------------------------------------------------------------------
 @pytest.fixture
 def pool(session) -> Pool:
-    p = Pool(name="Test Pool", currency="USD", governance_config={})
+    p = Pool(
+        name="Test Pool",
+        currency="USD",
+        governance_config={
+            "tiers": [
+                {"max_amount_cents": 10_000, "scheme": "auto_approve"},
+                {"max_amount_cents": 100_000, "scheme": "majority"},
+                {"max_amount_cents": None, "scheme": "unanimous"},
+            ]
+        },
+    )
     session.add(p)
     session.commit()
     return p

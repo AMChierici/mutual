@@ -18,6 +18,14 @@ data/db/*.sqlite-journal
 data/db/*.sqlite-wal
 data/db/*.sqlite-shm
 
+# Local claim-evidence uploads
+data/uploads/
+
+# Local Claude Code / agent session state
+.agents/
+.claude/
+skills-lock.json
+
 # IDE
 .vscode/
 .idea/

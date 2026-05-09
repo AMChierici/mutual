@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Claim #{{ claim.id }} — Mutual{% endblock %}
+{% block content %}
+<h1>Claim #{{ claim.id }}</h1>
+
+<dl>
+    <dt>Submitted by</dt><dd>{{ submitter.display_name }}</dd>
+    <dt>Submitted at</dt><dd>{{ claim.submitted_at.strftime("%Y-%m-%d %H:%M UTC") }}</dd>
+    <dt>Amount</dt><dd>{{ "%.2f" | format(claim.amount_requested / 100) }} {{ currency }}</dd>
+    <dt>Category</dt><dd>{{ claim.category }}</dd>
+    <dt>Date of expense</dt><dd>{{ claim.occurred_at.strftime("%Y-%m-%d") }}</dd>
+    <dt>Status</dt><dd><code>{{ claim.status.value }}</code></dd>
+</dl>
+
+<h2>Description</h2>
+<p>{{ claim.description }}</p>
+
+{% if claim.evidence_uris %}
+<h2>Evidence</h2>
+<ul>
+    {% for uri in claim.evidence_uris %}
+    <li><a href="/claims/{{ claim.id }}/evidence/{{ loop.index0 }}">{{ uri.split('/')[-1] }}</a></li>
+    {% endfor %}
+</ul>
+{% endif %}
+
+<p><a href="/claims">Back to claim list</a></p>
+{% endblock %}
