@@ -1,0 +1,10 @@
+services:
+  mutual:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data/db:/app/data/db
+    environment:
+      - MUTUAL_DB_PATH=/app/data/db/mutual.sqlite
+    restart: unless-stopped
