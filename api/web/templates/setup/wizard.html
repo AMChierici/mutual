@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+{% block title %}Set up your pool — Mutual{% endblock %}
+{% block content %}
+<h1>Set up your pool</h1>
+<p>One-time. After this, only members with a login link can get in.</p>
+
+{% if errors %}
+<div class="errors" role="alert">
+    <strong>Fix these before continuing:</strong>
+    <ul>{% for e in errors %}<li>{{ e }}</li>{% endfor %}</ul>
+</div>
+{% endif %}
+
+<form method="post" action="/setup">
+    <fieldset>
+        <legend>Pool basics</legend>
+        <p><label>Pool name<br>
+            <input name="pool_name" required value="{{ values.get('pool_name', '') }}"></label></p>
+        <p><label>Currency (3-letter ISO code)<br>
+            <input name="currency" required maxlength="3" minlength="3"
+                   value="{{ values.get('currency', 'USD') }}"></label></p>
+        <p><label>Starting balance (in major units, e.g. dollars)<br>
+            <input name="starting_balance_dollars" type="number" step="0.01" min="0"
+                   value="{{ values.get('starting_balance_dollars', '0') }}"></label></p>
+    </fieldset>
+
+    <fieldset>
+        <legend>Members</legend>
+        <p>At least one member must have role <code>admin</code> — that's you.
+           Email is optional in v0; if blank, copy the login link out-of-band.</p>
+        <div id="member-rows">
+            <div class="member-row">
+                <input name="member_name_0" placeholder="Name" required>
+                <input name="member_email_0" placeholder="Email (optional)" type="email">
+                <select name="member_role_0">
+                    <option value="admin" selected>admin</option>
+                    <option value="member">member</option>
+                    <option value="observer">observer</option>
+                </select>
+            </div>
+            <div class="member-row">
+                <input name="member_name_1" placeholder="Name">
+                <input name="member_email_1" placeholder="Email (optional)" type="email">
+                <select name="member_role_1">
+                    <option value="admin">admin</option>
+                    <option value="member" selected>member</option>
+                    <option value="observer">observer</option>
+                </select>
+            </div>
+            <div class="member-row">
+                <input name="member_name_2" placeholder="Name">
+                <input name="member_email_2" placeholder="Email (optional)" type="email">
+                <select name="member_role_2">
+                    <option value="admin">admin</option>
+                    <option value="member" selected>member</option>
+                    <option value="observer">observer</option>
+                </select>
+            </div>
+        </div>
+        <button type="button"
+                hx-get="/setup/member-row"
+                hx-target="#member-rows"
+                hx-swap="beforeend">+ Add another member</button>
+    </fieldset>
+
+    <fieldset>
+        <legend>Policy</legend>
+        <p>Pick a starting template; edit freely. The text below is what
+           binds your pool — say what you cover and what you don't, in
+           plain language.</p>
+        <p><label>Template
+            <select name="policy_template_id"
+                    hx-get="/setup/policy"
+                    hx-include="this"
+                    hx-target="#policy-textarea"
+                    hx-swap="outerHTML"
+                    hx-trigger="change">
+                <option value="">(blank — write your own)</option>
+                {% for t in policy_templates %}
+                <option value="{{ t.id }}">{{ t.title }}</option>
+                {% endfor %}
+            </select>
+        </label></p>
+        <textarea id="policy-textarea" name="policy_text" rows="10" cols="80"
+                  placeholder="What's covered, what isn't, who decides."></textarea>
+    </fieldset>
+
+    <fieldset>
+        <legend>Governance</legend>
+        <p>Smaller claims can be auto-approved; larger ones go to a vote.
+           Thresholds are in {{ values.get('currency', 'USD') }}. Leave the
+           last threshold blank — it's the catch-all.</p>
+        <div>
+            <label>Up to
+                <input type="number" step="0.01" min="0" name="tier_max_0" placeholder="100"> →
+                <select name="tier_scheme_0">
+                    {% for s in schemes %}
+                    <option value="{{ s }}"{% if s == 'auto_approve' %} selected{% endif %}>{{ s }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+        </div>
+        <div>
+            <label>Up to
+                <input type="number" step="0.01" min="0" name="tier_max_1" placeholder="1000"> →
+                <select name="tier_scheme_1">
+                    {% for s in schemes %}
+                    <option value="{{ s }}"{% if s == 'majority' %} selected{% endif %}>{{ s }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+        </div>
+        <div>
+            <label>Anything bigger →
+                <select name="tier_scheme_2">
+                    {% for s in schemes %}
+                    <option value="{{ s }}"{% if s == 'unanimous' %} selected{% endif %}>{{ s }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+        </div>
+    </fieldset>
+
+    <button type="submit">Create the pool</button>
+</form>
+{% endblock %}

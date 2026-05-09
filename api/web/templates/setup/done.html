@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}Setup complete — Mutual{% endblock %}
+{% block content %}
+<h1>Setup complete.</h1>
+<p>Your pool <strong>{{ pool_name }}</strong> is up. You're already signed in
+   on this device.</p>
+
+<h2>Backup admin login link</h2>
+<p>Bookmark this. It works once, expires in 24 hours, and gets you in from
+   another device:</p>
+<pre><code>{{ login_url }}</code></pre>
+
+<p><a href="/">Open the dashboard</a></p>
+{% endblock %}

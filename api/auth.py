@@ -39,8 +39,10 @@ def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
 
-def _new_token() -> str:
-    # 32 bytes -> ~43 url-safe chars; well within String(64).
+def mint_token() -> str:
+    """Cryptographically random url-safe token used for both login tokens
+    and session cookies. ~43 chars, well within ``String(64)``.
+    """
     return secrets.token_urlsafe(32)
 
 
@@ -51,7 +53,7 @@ def create_login_token(db: Session, member_id: int, *, now: datetime | None = No
     now = now or _utcnow()
     tok = LoginToken(
         member_id=member_id,
-        token=_new_token(),
+        token=mint_token(),
         created_at=now,
         expires_at=now + LOGIN_TOKEN_TTL,
     )
@@ -81,7 +83,7 @@ def consume_login_token(db: Session, token: str, *, now: datetime | None = None)
 
     auth_session = AuthSession(
         member_id=member.id,
-        token=_new_token(),
+        token=mint_token(),
         created_at=now,
         expires_at=now + SESSION_TTL,
         last_seen_at=now,

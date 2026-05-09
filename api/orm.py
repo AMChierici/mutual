@@ -64,6 +64,7 @@ class VoteDecision(enum.Enum):
 class LedgerKind(enum.Enum):
     contribution = "contribution"
     payout = "payout"
+    opening_balance = "opening_balance"
 
 
 def _enum_col(py_enum: type[enum.Enum], **kwargs):
@@ -86,6 +87,7 @@ class Pool(Base):
         UtcDateTime, default=_utcnow, nullable=False
     )
     policy_template_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    policy_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     governance_config: Mapped[dict[str, Any]] = mapped_column(
         JSON, default=dict, nullable=False
     )
