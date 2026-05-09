@@ -10,6 +10,7 @@ from fastapi.templating import Jinja2Templates
 
 from api.db import make_engine, make_session_factory
 from api.routes_auth import router as auth_router
+from api.routes_contributions import router as contributions_router
 from api.routes_setup import router as setup_router
 
 WEB_DIR = Path(__file__).resolve().parent / "web"
@@ -38,6 +39,7 @@ app.state.templates = Jinja2Templates(directory=str(WEB_DIR / "templates"))
 app.mount("/static", StaticFiles(directory=str(WEB_DIR / "static")), name="static")
 app.include_router(auth_router)
 app.include_router(setup_router)
+app.include_router(contributions_router)
 
 
 @app.get("/")

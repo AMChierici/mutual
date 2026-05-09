@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}Contributions recorded — Mutual{% endblock %}
+{% block content %}
+<h1>Period {{ period }}</h1>
+<p><strong>{{ created_count }} recorded.</strong></p>
+{% if skipped_count %}
+<p>{{ skipped_count }} skipped (zero amount, already recorded, or unknown member).</p>
+{% endif %}
+<p><a href="/contributions/bulk">Back to bulk entry</a> · <a href="/">Dashboard</a></p>
+{% endblock %}

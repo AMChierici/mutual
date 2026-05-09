@@ -109,3 +109,20 @@ async def admin_client(client, session, admin) -> AsyncClient:
     auth_session = consume_login_token(session, tok.token)
     client.cookies.set(SESSION_COOKIE, auth_session.token)
     return client
+
+
+@pytest.fixture
+def members(session, pool) -> list[Member]:
+    """Three active members for tests that need multiple participants."""
+    out: list[Member] = []
+    for name in ("Bo", "Cy", "Di"):
+        m = Member(
+            pool_id=pool.id,
+            display_name=name,
+            role=MemberRole.member,
+            status=MemberStatus.active,
+        )
+        session.add(m)
+        out.append(m)
+    session.commit()
+    return out
