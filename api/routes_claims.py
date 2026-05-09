@@ -21,8 +21,9 @@ from sqlalchemy.orm import Session
 from api.auth import current_member
 from api.claims import submit_claim
 from api.deps import get_db
-from api.orm import Claim, Member, Pool
+from api.orm import Claim, ClaimStatus, Member, Pool, Vote, VoteDecision
 from api.storage import get_uploads_dir
+from api.voting import cast_vote, list_pending_for_member
 
 router = APIRouter(prefix="/claims", tags=["claims"])
 
@@ -59,8 +60,27 @@ def _parse_occurred_date(raw: str) -> datetime:
 
 
 # ---------------------------------------------------------------------------
-# Listing + form (must be registered before /{claim_id} so they take priority)
+# Listing + form + pending (registered before /{claim_id} for path priority)
 # ---------------------------------------------------------------------------
+@router.get("/pending", response_class=HTMLResponse)
+def pending_for_me(
+    request: Request,
+    db: Session = Depends(get_db),
+    member: Member = Depends(current_member),
+) -> HTMLResponse:
+    pool = _the_pool(db)
+    claims = list_pending_for_member(db, pool_id=pool.id, member_id=member.id)
+    templates = request.app.state.templates
+    return templates.TemplateResponse(
+        request,
+        "claims/pending.html",
+        {
+            "claims": claims,
+            "currency": pool.currency,
+        },
+    )
+
+
 @router.get("/new", response_class=HTMLResponse)
 def new_claim_form(
     request: Request,
@@ -185,6 +205,19 @@ def claim_detail(
         raise HTTPException(status.HTTP_404_NOT_FOUND)
     pool = _the_pool(db)
     submitter = db.get(Member, claim.member_id)
+    members_by_id = {m.id: m for m in db.query(Member).filter_by(pool_id=pool.id).all()}
+    votes = (
+        db.query(Vote)
+        .filter_by(claim_id=claim.id)
+        .order_by(Vote.cast_at.asc())
+        .all()
+    )
+    already_voted = any(v.member_id == member.id for v in votes)
+    can_vote = (
+        claim.status == ClaimStatus.voting
+        and member.role.value != "observer"
+        and not already_voted
+    )
     templates = request.app.state.templates
     return templates.TemplateResponse(
         request,
@@ -195,7 +228,50 @@ def claim_detail(
             "currency": pool.currency,
             "is_owner": member.id == claim.member_id,
             "is_admin": member.role.value == "admin",
+            "votes": votes,
+            "members_by_id": members_by_id,
+            "can_vote": can_vote,
+            "already_voted": already_voted,
         },
+    )
+
+
+@router.post("/{claim_id}/vote", response_class=HTMLResponse)
+def post_vote(
+    claim_id: int,
+    decision: str = Form(...),
+    reason: str = Form(""),
+    db: Session = Depends(get_db),
+    member: Member = Depends(current_member),
+) -> RedirectResponse:
+    decision_clean = (decision or "").strip().lower()
+    try:
+        decision_enum = VoteDecision(decision_clean)
+    except ValueError as exc:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST, f"invalid decision {decision!r}"
+        ) from exc
+    if decision_enum not in (VoteDecision.approve, VoteDecision.reject):
+        # Abstain is in the data model but not exposed in the v0 UI.
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST, f"decision {decision_enum.value!r} is not allowed here"
+        )
+
+    reason_clean = (reason or "").strip() or None
+
+    try:
+        cast_vote(
+            db,
+            claim_id=claim_id,
+            member_id=member.id,
+            decision=decision_enum,
+            reason=reason_clean,
+        )
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
+
+    return RedirectResponse(
+        "/claims/pending", status_code=status.HTTP_303_SEE_OTHER
     )
 
 

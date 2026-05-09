@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Pending votes — Mutual{% endblock %}
+{% block content %}
+<h1>Awaiting your vote</h1>
+<p>One row per open claim. A reason is optional — leave it blank for a one-click vote.</p>
+
+{% if not claims %}
+<p>No claims awaiting your vote.</p>
+{% else %}
+<table>
+    <thead>
+        <tr>
+            <th>Claim</th>
+            <th>Amount ({{ currency }})</th>
+            <th>Category</th>
+            <th>Reason (optional)</th>
+            <th>Vote</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for c in claims %}
+        <tr>
+            <td><a href="/claims/{{ c.id }}">#{{ c.id }} — {{ c.description[:80] }}{% if c.description|length > 80 %}…{% endif %}</a></td>
+            <td>{{ "%.2f" | format(c.amount_requested / 100) }}</td>
+            <td>{{ c.category }}</td>
+            <td>
+                <form method="post" action="/claims/{{ c.id }}/vote" id="vote-{{ c.id }}">
+                    <input name="reason" placeholder="Optional reason">
+            </td>
+            <td>
+                    <button type="submit" name="decision" value="approve">Approve</button>
+                    <button type="submit" name="decision" value="reject">Reject</button>
+                </form>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endif %}
+
+<p><a href="/claims">All claims</a></p>
+{% endblock %}
