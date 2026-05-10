@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}Audit log — Mutual{% endblock %}
+{% block content %}
+<header>
+    <h1>Audit log</h1>
+    <p>Showing the latest {{ showing }} events (cap: {{ limit }}). Newest first.
+       This log is append-only — no edits, no deletes, ever.</p>
+    <p><a href="/">← Dashboard</a></p>
+</header>
+
+{% if not events %}
+<p>No events yet.</p>
+{% else %}
+<table>
+    <thead>
+        <tr>
+            <th>Time (UTC)</th>
+            <th>Actor</th>
+            <th>Kind</th>
+            <th>Payload</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for e in events %}
+        <tr>
+            <td><code>{{ e.recorded_at.strftime("%Y-%m-%d %H:%M:%S") }}</code></td>
+            <td>{{ e.actor_name }}</td>
+            <td><code>{{ e.kind }}</code></td>
+            <td><code>{{ e.payload }}</code></td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endif %}
+{% endblock %}

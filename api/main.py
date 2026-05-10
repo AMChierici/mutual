@@ -12,6 +12,7 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy import Engine
 
 from api.db import make_engine, make_session_factory
+from api.routes_audit import router as audit_router
 from api.routes_auth import router as auth_router
 from api.routes_claims import router as claims_router
 from api.routes_contributions import router as contributions_router
@@ -62,6 +63,7 @@ app.include_router(setup_router)
 app.include_router(contributions_router)
 app.include_router(claims_router)
 app.include_router(dashboard_router)
+app.include_router(audit_router)
 
 
 @app.get("/health")
