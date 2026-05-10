@@ -32,7 +32,8 @@ class ContributionCreate(BaseModel):
 
 
 def _current_period() -> str:
-    return datetime.now(timezone.utc).strftime("%Y-%m")
+    """ISO week date (e.g. ``2026-W19``) — Mutual records contributions weekly."""
+    return datetime.now(timezone.utc).strftime("%G-W%V")
 
 
 def _dollars_to_cents(raw: str | None) -> int:

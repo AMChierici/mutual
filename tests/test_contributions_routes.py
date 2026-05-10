@@ -16,13 +16,13 @@ async def test_post_contribution_admin_records_and_writes_ledger(
         json={
             "member_id": members[0].id,
             "amount_cents": 12_500,
-            "period": "2026-01",
+            "period": "2026-W01",
         },
     )
     assert r.status_code == 201, r.text
     body = r.json()
     assert body["amount_cents"] == 12_500
-    assert body["period"] == "2026-01"
+    assert body["period"] == "2026-W01"
     assert "id" in body
 
     session.expire_all()
@@ -36,7 +36,7 @@ async def test_post_contribution_admin_records_and_writes_ledger(
 async def test_post_contribution_unauthenticated_is_401(client, members):
     r = await client.post(
         "/contributions",
-        json={"member_id": members[0].id, "amount_cents": 100, "period": "2026-01"},
+        json={"member_id": members[0].id, "amount_cents": 100, "period": "2026-W01"},
     )
     assert r.status_code == 401
 
@@ -51,7 +51,7 @@ async def test_post_contribution_non_admin_is_403(client, session, members):
 
     r = await client.post(
         "/contributions",
-        json={"member_id": members[1].id, "amount_cents": 100, "period": "2026-01"},
+        json={"member_id": members[1].id, "amount_cents": 100, "period": "2026-W01"},
     )
     assert r.status_code == 403
 
@@ -59,7 +59,7 @@ async def test_post_contribution_non_admin_is_403(client, session, members):
 async def test_post_contribution_rejects_zero_amount(admin_client, members):
     r = await admin_client.post(
         "/contributions",
-        json={"member_id": members[0].id, "amount_cents": 0, "period": "2026-01"},
+        json={"member_id": members[0].id, "amount_cents": 0, "period": "2026-W01"},
     )
     assert r.status_code == 422  # pydantic ge=1
 
@@ -75,7 +75,7 @@ async def test_post_contribution_rejects_bad_period(admin_client, members):
 async def test_post_contribution_rejects_unknown_member(admin_client):
     r = await admin_client.post(
         "/contributions",
-        json={"member_id": 99999, "amount_cents": 100, "period": "2026-01"},
+        json={"member_id": 99999, "amount_cents": 100, "period": "2026-W01"},
     )
     assert r.status_code == 400
 
@@ -86,12 +86,12 @@ async def test_post_contribution_rejects_unknown_member(admin_client):
 async def test_get_bulk_form_admin_lists_all_active_members(
     admin_client, session, pool, members
 ):
-    r = await admin_client.get("/contributions/bulk", params={"period": "2026-01"})
+    r = await admin_client.get("/contributions/bulk", params={"period": "2026-W01"})
     assert r.status_code == 200
     for m in members:
         assert m.display_name in r.text
     assert 'name="period"' in r.text
-    assert 'value="2026-01"' in r.text
+    assert 'value="2026-W01"' in r.text
 
 
 async def test_get_bulk_form_excludes_inactive_members(
@@ -99,7 +99,7 @@ async def test_get_bulk_form_excludes_inactive_members(
 ):
     members[1].status = type(members[1].status).inactive
     session.commit()
-    r = await admin_client.get("/contributions/bulk", params={"period": "2026-01"})
+    r = await admin_client.get("/contributions/bulk", params={"period": "2026-W01"})
     assert r.status_code == 200
     assert members[0].display_name in r.text
     assert members[2].display_name in r.text
@@ -112,9 +112,9 @@ async def test_get_bulk_form_shows_already_recorded_amounts(
     # Pre-record one contribution for member[0] in 2026-01
     await admin_client.post(
         "/contributions",
-        json={"member_id": members[0].id, "amount_cents": 5_000, "period": "2026-01"},
+        json={"member_id": members[0].id, "amount_cents": 5_000, "period": "2026-W01"},
     )
-    r = await admin_client.get("/contributions/bulk", params={"period": "2026-01"})
+    r = await admin_client.get("/contributions/bulk", params={"period": "2026-W01"})
     assert r.status_code == 200
     assert "50.00" in r.text or "5000" in r.text  # already-recorded marker
 
@@ -124,12 +124,14 @@ async def test_get_bulk_form_unauthenticated_is_401(client):
     assert r.status_code == 401
 
 
-async def test_get_bulk_form_default_period_is_a_valid_yyyy_mm(admin_client):
+async def test_get_bulk_form_default_period_is_current_iso_week(admin_client):
     r = await admin_client.get("/contributions/bulk")
     assert r.status_code == 200
-    # Form should default to a YYYY-MM value (current month).
+    # Form should default to a YYYY-Www value (current ISO week).
     import re
-    assert re.search(r'name="period"\s+value="\d{4}-(0[1-9]|1[0-2])"', r.text)
+    assert re.search(
+        r'name="period"\s+value="\d{4}-W(0[1-9]|[1-4]\d|5[0-3])"', r.text
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -137,7 +139,7 @@ async def test_get_bulk_form_default_period_is_a_valid_yyyy_mm(admin_client):
 # ---------------------------------------------------------------------------
 async def test_post_bulk_records_multiple(admin_client, session, pool, members):
     data = {
-        "period": "2026-02",
+        "period": "2026-W02",
         f"amount_{members[0].id}": "100.00",
         f"amount_{members[1].id}": "50.00",
         f"amount_{members[2].id}": "25.00",
@@ -147,14 +149,14 @@ async def test_post_bulk_records_multiple(admin_client, session, pool, members):
     assert "3 recorded" in r.text or "3" in r.text  # summary shown
 
     session.expire_all()
-    contribs = session.query(Contribution).filter_by(period="2026-02").all()
+    contribs = session.query(Contribution).filter_by(period="2026-W02").all()
     assert {c.amount for c in contribs} == {10_000, 5_000, 2_500}
     assert session.query(LedgerEntry).count() == 3
 
 
 async def test_post_bulk_skips_blank_and_zero_rows(admin_client, session, members):
     data = {
-        "period": "2026-03",
+        "period": "2026-W03",
         f"amount_{members[0].id}": "100.00",
         f"amount_{members[1].id}": "",
         f"amount_{members[2].id}": "0",
@@ -162,7 +164,7 @@ async def test_post_bulk_skips_blank_and_zero_rows(admin_client, session, member
     r = await admin_client.post("/contributions/bulk", data=data)
     assert r.status_code == 200
     session.expire_all()
-    assert session.query(Contribution).filter_by(period="2026-03").count() == 1
+    assert session.query(Contribution).filter_by(period="2026-W03").count() == 1
 
 
 async def test_post_bulk_skips_members_already_recorded(
@@ -171,10 +173,10 @@ async def test_post_bulk_skips_members_already_recorded(
     # Pre-record member[0] for 2026-04
     await admin_client.post(
         "/contributions",
-        json={"member_id": members[0].id, "amount_cents": 1_000, "period": "2026-04"},
+        json={"member_id": members[0].id, "amount_cents": 1_000, "period": "2026-W04"},
     )
     data = {
-        "period": "2026-04",
+        "period": "2026-W04",
         f"amount_{members[0].id}": "100.00",
         f"amount_{members[1].id}": "50.00",
     }
@@ -202,6 +204,6 @@ async def test_post_bulk_non_admin_is_403(client, session, members):
     tok = create_login_token(session, members[0].id)
     auth_session = consume_login_token(session, tok.token)
     client.cookies.set(SESSION_COOKIE, auth_session.token)
-    data = {"period": "2026-01", f"amount_{members[1].id}": "10.00"}
+    data = {"period": "2026-W01", f"amount_{members[1].id}": "10.00"}
     r = await client.post("/contributions/bulk", data=data)
     assert r.status_code == 403

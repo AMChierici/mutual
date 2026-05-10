@@ -6,7 +6,9 @@ from pathlib import Path
 
 from alembic import command
 from alembic.config import Config
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.exception_handlers import http_exception_handler
+from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import Engine
@@ -17,6 +19,7 @@ from api.routes_auth import router as auth_router
 from api.routes_claims import router as claims_router
 from api.routes_contributions import router as contributions_router
 from api.routes_dashboard import router as dashboard_router
+from api.routes_login import router as login_router
 from api.routes_settings import router as settings_router
 from api.routes_setup import router as setup_router
 
@@ -60,12 +63,26 @@ app = FastAPI(
 app.state.templates = Jinja2Templates(directory=str(WEB_DIR / "templates"))
 app.mount("/static", StaticFiles(directory=str(WEB_DIR / "static")), name="static")
 app.include_router(auth_router)
+app.include_router(login_router)
 app.include_router(setup_router)
 app.include_router(contributions_router)
 app.include_router(claims_router)
 app.include_router(dashboard_router)
 app.include_router(audit_router)
 app.include_router(settings_router)
+
+
+@app.exception_handler(HTTPException)
+async def html_aware_http_exception_handler(request: Request, exc: HTTPException):
+    """For 401s that came from a browser (Accept includes text/html), redirect
+    the visitor to /login instead of dumping JSON. Keeps the API contract for
+    JSON / curl clients (Accept: */* or application/json) untouched.
+    """
+    if exc.status_code == 401:
+        accept = request.headers.get("accept", "").lower()
+        if "text/html" in accept:
+            return RedirectResponse("/login", status_code=303)
+    return await http_exception_handler(request, exc)
 
 
 @app.get("/health")

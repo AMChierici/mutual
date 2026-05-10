@@ -1,14 +1,16 @@
 {% extends "base.html" %}
-{% block title %}Monthly close — Mutual{% endblock %}
+{% block title %}Weekly close — Mutual{% endblock %}
 {% block content %}
 <h1>Record contributions</h1>
 <p>One row per member. Leave the amount blank to skip that member.
-   Members already recorded for this period are shown but won't be
-   double-counted.</p>
+   Members already recorded for this week are shown but won't be
+   double-counted. Mutual tracks contributions <strong>weekly</strong>
+   using ISO week dates (e.g. <code>2026-W19</code>).</p>
 
 <form method="post" action="/contributions/bulk">
-    <p><label>Period (YYYY-MM)
-        <input name="period" value="{{ period }}" pattern="\d{4}-(0[1-9]|1[0-2])" required>
+    <p><label>Week (YYYY-Www)
+        <input name="period" value="{{ period }}"
+               pattern="\d{4}-W(0[1-9]|[1-4]\d|5[0-3])" required>
     </label></p>
 
     <table>

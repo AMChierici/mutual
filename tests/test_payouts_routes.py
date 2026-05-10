@@ -21,7 +21,7 @@ def funded_pool(session, pool, admin):
         pool_id=pool.id,
         member_id=admin.id,
         amount_cents=100_000,
-        period="2026-01",
+        period="2026-W01",
         recorded_by=admin.id,
     )
     return pool

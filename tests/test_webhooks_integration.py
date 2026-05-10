@@ -119,7 +119,7 @@ def test_pending_vote_does_not_emit(session, configured_pool, admin, members, si
 def test_record_payout_emits_claim_paid(session, configured_pool, admin, sink):
     record_contribution(
         session, pool_id=configured_pool.id, member_id=admin.id,
-        amount_cents=100_000, period="2026-01", recorded_by=admin.id,
+        amount_cents=100_000, period="2026-W01", recorded_by=admin.id,
     )
     claim = submit_claim(
         session, pool_id=configured_pool.id, member_id=admin.id,

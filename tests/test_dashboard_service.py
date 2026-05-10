@@ -51,11 +51,12 @@ def test_monthly_buckets_oldest_first_and_includes_current(session, pool):
 def test_monthly_buckets_aggregate_contributions_into_recorded_at_month(
     session, pool, admin, members
 ):
-    # Record one contribution in March 2026
+    # Record one contribution in March 2026 — period W11 (Mon=Mar 9) for the
+    # 'period' bucketer, recorded_at also in March for the 'recorded_at' one.
     now_march = datetime(2026, 3, 12, 14, 0, tzinfo=timezone.utc)
     record_contribution(
         session, pool_id=pool.id, member_id=members[0].id,
-        amount_cents=10_000, period="2026-03",
+        amount_cents=10_000, period="2026-W11",
         recorded_by=admin.id, now=now_march,
     )
     buckets = monthly_buckets(session, pool.id, now=datetime(2026, 5, 10, tzinfo=timezone.utc))
@@ -65,11 +66,84 @@ def test_monthly_buckets_aggregate_contributions_into_recorded_at_month(
     assert other.contributions_cents == 0
 
 
+# ---------------------------------------------------------------------------
+# bucket_by toggle: backfilled contributions land in the period bucket
+# (default), or the recorded_at bucket when the viewer asks for that view.
+# ---------------------------------------------------------------------------
+def test_monthly_buckets_default_bucket_by_period_for_backfill(
+    session, pool, admin, members
+):
+    """5 contributions for distinct historical periods, all entered today.
+    Default view (bucket_by='period') shows them in 5 separate columns."""
+    now_today = datetime(2026, 5, 10, 12, 0, tzinfo=timezone.utc)
+    # ISO weeks chosen so Monday-of-week lands in each target month:
+    #   W02 → Jan 5, W06 → Feb 2, W11 → Mar 9, W15 → Apr 6, W19 → May 4.
+    for i, period in enumerate(("2026-W02", "2026-W06", "2026-W11", "2026-W15", "2026-W19")):
+        record_contribution(
+            session, pool_id=pool.id, member_id=members[0].id,
+            amount_cents=10_000 * (i + 1), period=period,
+            recorded_by=admin.id, now=now_today,
+        )
+    buckets = monthly_buckets(session, pool.id, now=now_today)
+    by_ym = {b.year_month: b.contributions_cents for b in buckets}
+    assert by_ym["2026-01"] == 10_000
+    assert by_ym["2026-02"] == 20_000
+    assert by_ym["2026-03"] == 30_000
+    assert by_ym["2026-04"] == 40_000
+    assert by_ym["2026-05"] == 50_000
+
+
+def test_monthly_buckets_recorded_at_mode_aggregates_in_today(
+    session, pool, admin, members
+):
+    """Same scenario, opt-in to bucket_by='recorded_at' — all 5 stack up
+    in today's column."""
+    now_today = datetime(2026, 5, 10, 12, 0, tzinfo=timezone.utc)
+    # ISO weeks chosen so Monday-of-week lands in each target month:
+    #   W02 → Jan 5, W06 → Feb 2, W11 → Mar 9, W15 → Apr 6, W19 → May 4.
+    for i, period in enumerate(("2026-W02", "2026-W06", "2026-W11", "2026-W15", "2026-W19")):
+        record_contribution(
+            session, pool_id=pool.id, member_id=members[0].id,
+            amount_cents=10_000 * (i + 1), period=period,
+            recorded_by=admin.id, now=now_today,
+        )
+    buckets = monthly_buckets(
+        session, pool.id, now=now_today, bucket_by="recorded_at"
+    )
+    by_ym = {b.year_month: b.contributions_cents for b in buckets}
+    assert by_ym["2026-05"] == 10_000 + 20_000 + 30_000 + 40_000 + 50_000
+    assert by_ym["2026-01"] == 0
+    assert by_ym["2026-04"] == 0
+
+
+def test_monthly_buckets_payouts_unchanged_by_bucket_mode(session, pool, admin):
+    """Payouts have no period field; both modes bucket payouts by
+    LedgerEntry.recorded_at. Same number for both views."""
+    record_contribution(
+        session, pool_id=pool.id, member_id=admin.id,
+        amount_cents=100_000, period="2026-W01",
+        recorded_by=admin.id,
+        now=datetime(2026, 1, 5, tzinfo=timezone.utc),
+    )
+    claim = _claim(session, pool, admin)
+    record_payout(
+        session, claim_id=claim.id, amount_paid_cents=5_000,
+        recorded_by=admin.id,
+        now=datetime(2026, 4, 5, tzinfo=timezone.utc),
+        paid_at=datetime(2026, 4, 5, tzinfo=timezone.utc),
+    )
+    now = datetime(2026, 5, 10, tzinfo=timezone.utc)
+    period_view = {b.year_month: b.payouts_cents for b in monthly_buckets(session, pool.id, now=now, bucket_by="period")}
+    rec_view = {b.year_month: b.payouts_cents for b in monthly_buckets(session, pool.id, now=now, bucket_by="recorded_at")}
+    assert period_view["2026-04"] == 5_000
+    assert rec_view["2026-04"] == 5_000
+
+
 def test_monthly_buckets_aggregate_payouts(session, pool, admin):
     # Seed balance + approved claim + payout dated April 2026.
     record_contribution(
         session, pool_id=pool.id, member_id=admin.id,
-        amount_cents=100_000, period="2026-01",
+        amount_cents=100_000, period="2026-W01",
         recorded_by=admin.id,
         now=datetime(2026, 1, 5, tzinfo=timezone.utc),
     )
@@ -89,7 +163,7 @@ def test_monthly_buckets_drops_data_older_than_12_months(session, pool, admin, m
     # Contribution in May 2024 (well outside 12-month window starting June 2025)
     record_contribution(
         session, pool_id=pool.id, member_id=members[0].id,
-        amount_cents=10_000, period="2024-05",
+        amount_cents=10_000, period="2024-W05",
         recorded_by=admin.id,
         now=datetime(2024, 5, 1, tzinfo=timezone.utc),
     )
@@ -111,15 +185,15 @@ def test_member_contribution_status_includes_all_non_inactive_members(
 def test_member_contribution_status_totals_contributions(session, pool, admin, members):
     record_contribution(
         session, pool_id=pool.id, member_id=members[0].id,
-        amount_cents=5_000, period="2026-01", recorded_by=admin.id,
+        amount_cents=5_000, period="2026-W01", recorded_by=admin.id,
     )
     record_contribution(
         session, pool_id=pool.id, member_id=members[0].id,
-        amount_cents=3_000, period="2026-02", recorded_by=admin.id,
+        amount_cents=3_000, period="2026-W02", recorded_by=admin.id,
     )
     rows = {r["member_id"]: r for r in member_contribution_status(session, pool.id)}
     assert rows[members[0].id]["total_cents"] == 8_000
-    assert rows[members[0].id]["last_period"] == "2026-02"
+    assert rows[members[0].id]["last_period"] == "2026-W02"
     assert rows[members[1].id]["total_cents"] == 0
     assert rows[members[1].id]["last_period"] is None
 
@@ -154,7 +228,7 @@ def test_overview_summary_bundles_balance_counts_and_currency(
 ):
     record_contribution(
         session, pool_id=pool.id, member_id=admin.id,
-        amount_cents=50_000, period="2026-01", recorded_by=admin.id,
+        amount_cents=50_000, period="2026-W01", recorded_by=admin.id,
     )
     summary = overview_summary(session, pool.id)
     assert summary["currency"] == pool.currency

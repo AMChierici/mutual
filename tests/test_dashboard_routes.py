@@ -25,7 +25,7 @@ async def test_root_with_no_pool_redirects_to_setup(client):
 async def test_root_authenticated_renders_dashboard(admin_client, session, pool, admin):
     record_contribution(
         session, pool_id=pool.id, member_id=admin.id,
-        amount_cents=50_000, period="2026-01", recorded_by=admin.id,
+        amount_cents=50_000, period="2026-W01", recorded_by=admin.id,
     )
     r = await admin_client.get("/")
     assert r.status_code == 200
@@ -45,7 +45,7 @@ async def test_root_lists_active_members_and_their_totals(
 ):
     record_contribution(
         session, pool_id=pool.id, member_id=members[0].id,
-        amount_cents=20_000, period="2026-04", recorded_by=admin.id,
+        amount_cents=20_000, period="2026-W04", recorded_by=admin.id,
     )
     r = await admin_client.get("/")
     assert r.status_code == 200
@@ -71,12 +71,66 @@ async def test_root_shows_pending_claims_section(admin_client, session, pool, ad
 async def test_root_chart_renders_inline_svg(admin_client, session, pool, admin):
     record_contribution(
         session, pool_id=pool.id, member_id=admin.id,
-        amount_cents=10_000, period="2026-04", recorded_by=admin.id,
+        amount_cents=10_000, period="2026-W04", recorded_by=admin.id,
     )
     r = await admin_client.get("/")
     assert r.status_code == 200
     assert "<svg" in r.text
     assert "</svg>" in r.text
+
+
+async def test_root_default_bucket_is_period(admin_client, session, pool, admin):
+    """Backfilling 5 historical periods today should show 5 columns under
+    the default view, not one tall column."""
+    from datetime import datetime, timezone
+    from api.contributions import record_contribution as _rc
+    today = datetime.now(timezone.utc)
+    for i, period in enumerate(("2026-W02", "2026-W06", "2026-W11", "2026-W15", "2026-W19")):
+        _rc(
+            session, pool_id=pool.id, member_id=admin.id,
+            amount_cents=10_000 * (i + 1), period=period,
+            recorded_by=admin.id, now=today,
+        )
+    r = await admin_client.get("/")
+    assert r.status_code == 200
+    # Five distinct non-zero contribution bars (one per period).
+    # We assert by counting distinct contribution-tooltip "in <amount>" strings.
+    for amount in ("100.00", "200.00", "300.00", "400.00", "500.00"):
+        assert f"in {amount}" in r.text
+
+
+async def test_root_bucket_recorded_at_query_stacks_into_today(
+    admin_client, session, pool, admin
+):
+    from datetime import datetime, timezone
+    from api.contributions import record_contribution as _rc
+    today = datetime.now(timezone.utc)
+    for i, period in enumerate(("2026-W02", "2026-W06", "2026-W11", "2026-W15", "2026-W19")):
+        _rc(
+            session, pool_id=pool.id, member_id=admin.id,
+            amount_cents=10_000 * (i + 1), period=period,
+            recorded_by=admin.id, now=today,
+        )
+    r = await admin_client.get("/?bucket=recorded_at")
+    assert r.status_code == 200
+    # Total $1500 stacks into a single column under the recorded_at view.
+    assert "in 1500.00" in r.text
+
+
+async def test_root_renders_bucket_toggle_links(admin_client, session, pool, admin):
+    r = await admin_client.get("/")
+    assert r.status_code == 200
+    # Two toggle controls present, default is "period".
+    assert "By period" in r.text
+    assert "By recorded date" in r.text
+    # Recorded-date is a link (not active)
+    assert 'href="/?bucket=recorded_at"' in r.text
+
+
+async def test_root_invalid_bucket_query_falls_back_to_default(admin_client):
+    r = await admin_client.get("/?bucket=garbage")
+    assert r.status_code == 200
+    # Doesn't 400; falls back gracefully.
 
 
 # ---------------------------------------------------------------------------
@@ -92,7 +146,7 @@ async def test_models_renders_pricing_and_reserving_rationales(
 ):
     record_contribution(
         session, pool_id=pool.id, member_id=admin.id,
-        amount_cents=100_000, period="2026-01", recorded_by=admin.id,
+        amount_cents=100_000, period="2026-W01", recorded_by=admin.id,
     )
     r = await admin_client.get("/models")
     assert r.status_code == 200

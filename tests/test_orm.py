@@ -135,7 +135,7 @@ def test_contribution_persists(session):
         pool_id=p.id,
         member_id=m.id,
         amount=10000,
-        period="2026-01",
+        period="2026-W01",
         recorded_by=m.id,
     )
     session.add(c)

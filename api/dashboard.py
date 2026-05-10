@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from typing import Literal
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -36,6 +37,21 @@ def _month_label(dt: datetime) -> str:
     return dt.strftime("%Y-%m")
 
 
+def _period_to_year_month(period: str) -> str | None:
+    """Map a contribution ``period`` (ISO week, e.g. ``2026-W19``) to the
+    ``YYYY-MM`` month containing its Monday. Returns ``None`` if the input
+    isn't a parseable ISO-week string.
+    """
+    try:
+        year = int(period[:4])
+        # period[5] is the literal 'W'
+        week = int(period[6:])
+        d = datetime.fromisocalendar(year, week, 1)  # Monday of that ISO week
+    except (ValueError, IndexError):
+        return None
+    return f"{d.year:04d}-{d.month:02d}"
+
+
 def _last_12_months(now: datetime) -> list[str]:
     """Return 12 ``YYYY-MM`` strings, oldest first, ending in ``now``'s month."""
     out: list[str] = []
@@ -49,15 +65,33 @@ def _last_12_months(now: datetime) -> list[str]:
     return list(reversed(out))
 
 
+BucketBy = Literal["period", "recorded_at"]
+DEFAULT_BUCKET_BY: BucketBy = "period"
+
+
 def monthly_buckets(
-    db: Session, pool_id: int, *, now: datetime | None = None
+    db: Session,
+    pool_id: int,
+    *,
+    now: datetime | None = None,
+    bucket_by: BucketBy = DEFAULT_BUCKET_BY,
 ) -> list[MonthBucket]:
     """Last 12 months of contributions (in) and payouts (out), oldest first.
 
-    Contributions are bucketed by ``Contribution.recorded_at``; payouts by
-    ``LedgerEntry.recorded_at`` (which equals ``Payout.paid_at`` from
-    :func:`api.payouts.record_payout`).
+    ``bucket_by`` controls how contributions are placed:
+
+    * ``"period"`` (default) — by the ``YYYY-MM`` admins typed when recording
+      ("the May column shows what was contributed *for* May"). Right answer
+      when backfilling historical periods today.
+    * ``"recorded_at"`` — by the wall-clock moment the row was written
+      ("the May column shows what was *entered* in May"). Right answer when
+      tracking real-time cash flow.
+
+    Payouts always bucket by ``LedgerEntry.recorded_at`` since the schema has
+    no period field for them — the toggle only affects contribution placement.
     """
+    if bucket_by not in ("period", "recorded_at"):
+        bucket_by = DEFAULT_BUCKET_BY
     now = now or datetime.now(timezone.utc)
     months = _last_12_months(now)
 
@@ -65,8 +99,13 @@ def monthly_buckets(
     for c in db.execute(
         select(Contribution).where(Contribution.pool_id == pool_id)
     ).scalars():
-        ym = _month_label(c.recorded_at)
-        if ym in contrib_by_month:
+        if bucket_by == "period":
+            # period is an ISO week (YYYY-Www) — roll up to its containing month
+            # for chart placement (chart axis is year-month).
+            ym = _period_to_year_month(c.period)
+        else:
+            ym = _month_label(c.recorded_at)
+        if ym is not None and ym in contrib_by_month:
             contrib_by_month[ym] += c.amount
 
     payout_by_month: dict[str, int] = {ym: 0 for ym in months}

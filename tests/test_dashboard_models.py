@@ -34,7 +34,7 @@ def _seed_paid_claim(session, pool, admin, amount_cents, occurred_iso):
 def _seed_balance(session, pool, admin, cents=100_000):
     record_contribution(
         session, pool_id=pool.id, member_id=admin.id,
-        amount_cents=cents, period="2026-01", recorded_by=admin.id,
+        amount_cents=cents, period="2026-W01", recorded_by=admin.id,
     )
 
 

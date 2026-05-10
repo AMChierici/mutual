@@ -37,7 +37,7 @@ def _seed_balance(session, pool, admin, amount_cents):
         pool_id=pool.id,
         member_id=admin.id,
         amount_cents=amount_cents,
-        period="2026-01",
+        period="2026-W01",
         recorded_by=admin.id,
     )
 

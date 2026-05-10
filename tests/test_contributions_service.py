@@ -55,12 +55,12 @@ def test_record_contribution_creates_contribution_row(session, pool, admin, memb
         pool_id=pool.id,
         member_id=members[0].id,
         amount_cents=10_000,
-        period="2026-01",
+        period="2026-W01",
         recorded_by=admin.id,
     )
     assert c.id is not None
     assert c.amount == 10_000
-    assert c.period == "2026-01"
+    assert c.period == "2026-W01"
     assert c.recorded_by == admin.id
 
 
@@ -70,7 +70,7 @@ def test_record_contribution_writes_ledger_entry(session, pool, admin, members):
         pool_id=pool.id,
         member_id=members[0].id,
         amount_cents=10_000,
-        period="2026-01",
+        period="2026-W01",
         recorded_by=admin.id,
     )
     entries = session.query(LedgerEntry).filter_by(pool_id=pool.id).all()
@@ -87,7 +87,7 @@ def test_record_contribution_writes_audit_event(session, pool, admin, members):
         pool_id=pool.id,
         member_id=members[0].id,
         amount_cents=5_000,
-        period="2026-02",
+        period="2026-W02",
         recorded_by=admin.id,
     )
     audit = (
@@ -97,22 +97,22 @@ def test_record_contribution_writes_audit_event(session, pool, admin, members):
     )
     assert audit.actor_member_id == admin.id
     assert audit.payload_json["amount_cents"] == 5_000
-    assert audit.payload_json["period"] == "2026-02"
+    assert audit.payload_json["period"] == "2026-W02"
     assert audit.payload_json["member_id"] == members[0].id
 
 
 def test_record_contribution_running_balance_grows(session, pool, admin, members):
     record_contribution(
         session, pool_id=pool.id, member_id=members[0].id,
-        amount_cents=1_000, period="2026-01", recorded_by=admin.id,
+        amount_cents=1_000, period="2026-W01", recorded_by=admin.id,
     )
     record_contribution(
         session, pool_id=pool.id, member_id=members[1].id,
-        amount_cents=2_500, period="2026-01", recorded_by=admin.id,
+        amount_cents=2_500, period="2026-W01", recorded_by=admin.id,
     )
     record_contribution(
         session, pool_id=pool.id, member_id=members[2].id,
-        amount_cents=500, period="2026-01", recorded_by=admin.id,
+        amount_cents=500, period="2026-W01", recorded_by=admin.id,
     )
     entries = (
         session.query(LedgerEntry)
@@ -136,7 +136,7 @@ def test_record_contribution_starts_from_existing_balance(session, pool, admin, 
 
     record_contribution(
         session, pool_id=pool.id, member_id=members[0].id,
-        amount_cents=2_000, period="2026-01", recorded_by=admin.id,
+        amount_cents=2_000, period="2026-W01", recorded_by=admin.id,
     )
     assert current_balance(session, pool.id) == 12_000
 
@@ -148,7 +148,7 @@ def test_record_contribution_rejects_zero_amount(session, pool, admin, members):
     with pytest.raises(ValueError):
         record_contribution(
             session, pool_id=pool.id, member_id=members[0].id,
-            amount_cents=0, period="2026-01", recorded_by=admin.id,
+            amount_cents=0, period="2026-W01", recorded_by=admin.id,
         )
 
 
@@ -156,7 +156,7 @@ def test_record_contribution_rejects_negative_amount(session, pool, admin, membe
     with pytest.raises(ValueError):
         record_contribution(
             session, pool_id=pool.id, member_id=members[0].id,
-            amount_cents=-1, period="2026-01", recorded_by=admin.id,
+            amount_cents=-1, period="2026-W01", recorded_by=admin.id,
         )
 
 
@@ -178,7 +178,7 @@ def test_record_contribution_rejects_unknown_member(session, pool, admin):
     with pytest.raises(ValueError):
         record_contribution(
             session, pool_id=pool.id, member_id=99999,
-            amount_cents=100, period="2026-01", recorded_by=admin.id,
+            amount_cents=100, period="2026-W01", recorded_by=admin.id,
         )
 
 
@@ -197,7 +197,7 @@ def test_record_contribution_rejects_member_in_different_pool(session, admin):
     with pytest.raises(ValueError):
         record_contribution(
             session, pool_id=admin.pool_id, member_id=other_member.id,
-            amount_cents=100, period="2026-01", recorded_by=admin.id,
+            amount_cents=100, period="2026-W01", recorded_by=admin.id,
         )
 
 
@@ -207,7 +207,7 @@ def test_record_contribution_does_not_commit_if_amount_invalid(
     with pytest.raises(ValueError):
         record_contribution(
             session, pool_id=pool.id, member_id=members[0].id,
-            amount_cents=0, period="2026-01", recorded_by=admin.id,
+            amount_cents=0, period="2026-W01", recorded_by=admin.id,
         )
     assert session.query(Contribution).count() == 0
     assert session.query(LedgerEntry).count() == 0
@@ -220,7 +220,7 @@ def test_record_bulk_creates_one_contribution_per_row(session, pool, admin, memb
     summary = record_bulk(
         session,
         pool_id=pool.id,
-        period="2026-01",
+        period="2026-W01",
         rows=[
             BulkContributionRow(member_id=members[0].id, amount_cents=1_000),
             BulkContributionRow(member_id=members[1].id, amount_cents=2_000),
@@ -239,7 +239,7 @@ def test_record_bulk_skips_zero_amount_rows(session, pool, admin, members):
     summary = record_bulk(
         session,
         pool_id=pool.id,
-        period="2026-01",
+        period="2026-W01",
         rows=[
             BulkContributionRow(member_id=members[0].id, amount_cents=1_000),
             BulkContributionRow(member_id=members[1].id, amount_cents=0),
@@ -255,12 +255,12 @@ def test_record_bulk_skips_member_already_recorded_for_period(
 ):
     record_contribution(
         session, pool_id=pool.id, member_id=members[0].id,
-        amount_cents=500, period="2026-01", recorded_by=admin.id,
+        amount_cents=500, period="2026-W01", recorded_by=admin.id,
     )
     summary = record_bulk(
         session,
         pool_id=pool.id,
-        period="2026-01",
+        period="2026-W01",
         rows=[
             BulkContributionRow(member_id=members[0].id, amount_cents=1_000),
             BulkContributionRow(member_id=members[1].id, amount_cents=2_000),
@@ -272,7 +272,7 @@ def test_record_bulk_skips_member_already_recorded_for_period(
     # member[0]'s amount was NOT double-recorded
     assert (
         session.query(Contribution)
-        .filter_by(member_id=members[0].id, period="2026-01")
+        .filter_by(member_id=members[0].id, period="2026-W01")
         .count()
         == 1
     )
@@ -282,7 +282,7 @@ def test_record_bulk_running_balance_is_correct(session, pool, admin, members):
     record_bulk(
         session,
         pool_id=pool.id,
-        period="2026-01",
+        period="2026-W01",
         rows=[
             BulkContributionRow(member_id=members[0].id, amount_cents=1_000),
             BulkContributionRow(member_id=members[1].id, amount_cents=2_000),
@@ -324,7 +324,7 @@ def test_record_bulk_skips_members_in_other_pools(session, pool, admin, members)
     summary = record_bulk(
         session,
         pool_id=pool.id,
-        period="2026-01",
+        period="2026-W01",
         rows=[
             BulkContributionRow(member_id=foreign.id, amount_cents=500),
             BulkContributionRow(member_id=members[0].id, amount_cents=200),

@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}Sign in — Mutual{% endblock %}
+{% block content %}
+<h1>This pool is private.</h1>
+<p>Paste the magic link the admin sent you. Both the full URL
+   (<code>http://…/auth/login/abc…</code>) and just the token work.</p>
+
+{% if error %}
+<p style="color: #c81e1e;"><strong>{{ error }}</strong></p>
+{% endif %}
+
+<form method="post" action="/login">
+    <p>
+        <label>Magic link or token<br>
+            <input name="link" value="{{ link_value }}" size="60" autofocus
+                   placeholder="http://localhost:8000/auth/login/…">
+        </label>
+    </p>
+    <button type="submit">Sign in</button>
+</form>
+
+<p><small>If you don't have a link, ask your pool admin to mint one for you.
+   They go to <code>POST /auth/magic-link</code> with your member id;
+   the response includes a one-time URL valid for 24 hours.</small></p>
+{% endblock %}

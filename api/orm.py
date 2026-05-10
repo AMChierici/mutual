@@ -119,7 +119,7 @@ class Contribution(Base):
     pool_id: Mapped[int] = mapped_column(ForeignKey("pools.id"), nullable=False)
     member_id: Mapped[int] = mapped_column(ForeignKey("members.id"), nullable=False)
     amount: Mapped[int] = mapped_column(Integer, nullable=False)
-    period: Mapped[str] = mapped_column(String(7), nullable=False)
+    period: Mapped[str] = mapped_column(String(10), nullable=False)
     recorded_at: Mapped[datetime] = mapped_column(
         UtcDateTime, default=_utcnow, nullable=False
     )

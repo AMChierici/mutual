@@ -76,11 +76,11 @@ def test_list_audit_events_newest_first(session, pool, admin):
     # orders by recorded_at desc.
     record_contribution(
         session, pool_id=pool.id, member_id=admin.id,
-        amount_cents=1_000, period="2026-01", recorded_by=admin.id,
+        amount_cents=1_000, period="2026-W01", recorded_by=admin.id,
     )
     record_contribution(
         session, pool_id=pool.id, member_id=admin.id,
-        amount_cents=2_000, period="2026-02", recorded_by=admin.id,
+        amount_cents=2_000, period="2026-W02", recorded_by=admin.id,
     )
     events = list_audit_events(session, pool.id)
     assert len(events) >= 2
@@ -93,7 +93,7 @@ def test_list_audit_events_caps_at_limit(session, pool, admin):
     for i in range(10):
         record_contribution(
             session, pool_id=pool.id, member_id=admin.id,
-            amount_cents=100, period=f"2026-{i+1:02d}" if i < 9 else "2026-10",
+            amount_cents=100, period=f"2026-W{i+1:02d}",
             recorded_by=admin.id,
         )
     events = list_audit_events(session, pool.id, limit=5)
@@ -130,7 +130,7 @@ async def test_get_audit_unauthenticated_is_401(client, pool):
 async def test_get_audit_renders_events(admin_client, session, pool, admin):
     record_contribution(
         session, pool_id=pool.id, member_id=admin.id,
-        amount_cents=12_500, period="2026-01", recorded_by=admin.id,
+        amount_cents=12_500, period="2026-W01", recorded_by=admin.id,
     )
     r = await admin_client.get("/audit")
     assert r.status_code == 200
@@ -160,7 +160,7 @@ async def test_get_audit_member_can_see(member_client, session, pool, admin):
     """Mutual aid transparency — any active member can read the audit log."""
     record_contribution(
         session, pool_id=pool.id, member_id=admin.id,
-        amount_cents=100, period="2026-01", recorded_by=admin.id,
+        amount_cents=100, period="2026-W01", recorded_by=admin.id,
     )
     r = await member_client.get("/audit")
     assert r.status_code == 200
@@ -177,7 +177,7 @@ async def test_get_audit_includes_each_lifecycle_kind_after_full_run(
     from api.payouts import record_payout
     record_contribution(
         session, pool_id=pool.id, member_id=admin.id,
-        amount_cents=100_000, period="2026-01", recorded_by=admin.id,
+        amount_cents=100_000, period="2026-W01", recorded_by=admin.id,
     )
     claim = submit_claim(
         session, pool_id=pool.id, member_id=admin.id,

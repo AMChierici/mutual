@@ -2,6 +2,26 @@
 {% block tab_content %}
 
 <h2>Last 12 months</h2>
+<p style="font-size: 12px; color: #666;">
+    Bucket contributions:
+    {% if bucket_by == "period" %}
+        <strong>By period</strong>
+    {% else %}
+        <a href="/?bucket=period">By period</a>
+    {% endif %}
+    ·
+    {% if bucket_by == "recorded_at" %}
+        <strong>By recorded date</strong>
+    {% else %}
+        <a href="/?bucket=recorded_at">By recorded date</a>
+    {% endif %}
+    <br>
+    <small>
+        <em>Period</em> = the YYYY-MM the contribution is <em>for</em> (right when backfilling).
+        <em>Recorded date</em> = when the row was written (right for live cash flow).
+        Payouts always bucket by recorded date.
+    </small>
+</p>
 <svg viewBox="0 0 720 240" width="720" height="240" role="img" aria-label="Contributions and payouts, last 12 months">
     <!-- baseline -->
     <line x1="0" y1="200" x2="720" y2="200" stroke="#999" stroke-width="1"/>

@@ -28,7 +28,7 @@ from api.orm import (
     Member,
 )
 
-_PERIOD_RE = re.compile(r"^\d{4}-(0[1-9]|1[0-2])$")
+_PERIOD_RE = re.compile(r"^\d{4}-W(0[1-9]|[1-4]\d|5[0-3])$")
 
 
 class BulkContributionRow(BaseModel):
@@ -44,7 +44,7 @@ class BulkSummary:
 
 def _validate_period(period: str) -> None:
     if not _PERIOD_RE.match(period):
-        raise ValueError(f"invalid period {period!r}; expected YYYY-MM")
+        raise ValueError(f"invalid period {period!r}; expected YYYY-Www (ISO week)")
 
 
 def current_balance(db: Session, pool_id: int) -> int:

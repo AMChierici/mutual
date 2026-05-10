@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from api.auth import SESSION_COOKIE, refresh_session, resolve_session
 from api.dashboard import (
+    DEFAULT_BUCKET_BY,
     member_contribution_status,
     monthly_buckets,
     overview_summary,
@@ -47,7 +48,11 @@ def _current_member_strict(request: Request, db: Session) -> Member:
 
 
 @router.get("/", response_class=HTMLResponse)
-def overview(request: Request, db: Session = Depends(get_db)):
+def overview(
+    request: Request,
+    bucket: str = DEFAULT_BUCKET_BY,
+    db: Session = Depends(get_db),
+):
     pool_or_redirect = _get_pool_or_redirect(db)
     if isinstance(pool_or_redirect, RedirectResponse):
         return pool_or_redirect
@@ -55,8 +60,9 @@ def overview(request: Request, db: Session = Depends(get_db)):
 
     member = _current_member_strict(request, db)
 
+    bucket_by = bucket if bucket in ("period", "recorded_at") else DEFAULT_BUCKET_BY
     summary = overview_summary(db, pool.id)
-    buckets = monthly_buckets(db, pool.id)
+    buckets = monthly_buckets(db, pool.id, bucket_by=bucket_by)
     members_status = member_contribution_status(db, pool.id)
     pendings = pending_claims(db, pool.id)
 
@@ -80,6 +86,7 @@ def overview(request: Request, db: Session = Depends(get_db)):
             "chart_max_cents": chart_max_cents,
             "members_status": members_status,
             "pending": pendings,
+            "bucket_by": bucket_by,
         },
     )
 
