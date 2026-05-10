@@ -18,10 +18,11 @@ from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from api.auth import current_member
+from api.auth import current_member, require_admin
 from api.claims import submit_claim
 from api.deps import get_db
-from api.orm import Claim, ClaimStatus, Member, Pool, Vote, VoteDecision
+from api.orm import Claim, ClaimStatus, Member, Payout, Pool, Vote, VoteDecision
+from api.payouts import record_payout
 from api.storage import get_uploads_dir
 from api.voting import cast_vote, list_pending_for_member
 
@@ -213,10 +214,17 @@ def claim_detail(
         .all()
     )
     already_voted = any(v.member_id == member.id for v in votes)
+    is_admin = member.role.value == "admin"
     can_vote = (
         claim.status == ClaimStatus.voting
         and member.role.value != "observer"
         and not already_voted
+    )
+    can_pay = claim.status == ClaimStatus.approved and is_admin
+    payout = (
+        db.query(Payout).filter_by(claim_id=claim.id).order_by(Payout.id.desc()).first()
+        if claim.status == ClaimStatus.paid
+        else None
     )
     templates = request.app.state.templates
     return templates.TemplateResponse(
@@ -227,12 +235,56 @@ def claim_detail(
             "submitter": submitter,
             "currency": pool.currency,
             "is_owner": member.id == claim.member_id,
-            "is_admin": member.role.value == "admin",
+            "is_admin": is_admin,
             "votes": votes,
             "members_by_id": members_by_id,
             "can_vote": can_vote,
             "already_voted": already_voted,
+            "can_pay": can_pay,
+            "payout": payout,
+            "today": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
         },
+    )
+
+
+@router.post("/{claim_id}/pay", response_class=HTMLResponse)
+def post_pay(
+    claim_id: int,
+    amount_dollars: str = Form(""),
+    paid_date: str = Form(""),
+    notes: str = Form(""),
+    db: Session = Depends(get_db),
+    admin: Member = Depends(require_admin),
+) -> RedirectResponse:
+    claim = db.get(Claim, claim_id)
+    if claim is None:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "claim not found")
+
+    # Default to the requested amount when the field is blank.
+    raw_amount = (amount_dollars or "").strip()
+    amount_cents = (
+        _dollars_to_cents(raw_amount) if raw_amount else claim.amount_requested
+    )
+
+    raw_paid_date = (paid_date or "").strip()
+    paid_at = _parse_occurred_date(raw_paid_date) if raw_paid_date else None
+
+    notes_clean = (notes or "").strip() or None
+
+    try:
+        record_payout(
+            db,
+            claim_id=claim_id,
+            amount_paid_cents=amount_cents,
+            recorded_by=admin.id,
+            paid_at=paid_at,
+            notes=notes_clean,
+        )
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
+
+    return RedirectResponse(
+        f"/claims/{claim_id}", status_code=status.HTTP_303_SEE_OTHER
     )
 
 

@@ -36,6 +36,29 @@
 <p><em>You've already voted on this claim.</em></p>
 {% endif %}
 
+{% if can_pay %}
+<h2>Mark as paid</h2>
+<form method="post" action="/claims/{{ claim.id }}/pay">
+    <p><label>Amount paid ({{ currency }})<br>
+        <input type="number" step="0.01" min="0" name="amount_dollars"
+               value="{{ "%.2f" | format(claim.amount_requested / 100) }}"></label></p>
+    <p><label>Date paid<br>
+        <input type="date" name="paid_date" value="{{ today }}"></label></p>
+    <p><label>Notes (optional)<br>
+        <input name="notes" placeholder="e.g. Venmo, wire ref, cash"></label></p>
+    <button type="submit">Record payout</button>
+</form>
+{% endif %}
+
+{% if payout %}
+<h2>Payout</h2>
+<dl>
+    <dt>Amount paid</dt><dd>{{ "%.2f" | format(payout.amount_paid / 100) }} {{ currency }}</dd>
+    <dt>Paid at</dt><dd>{{ payout.paid_at.strftime("%Y-%m-%d") }}</dd>
+    {% if payout.notes %}<dt>Notes</dt><dd>{{ payout.notes }}</dd>{% endif %}
+</dl>
+{% endif %}
+
 {% if votes %}
 <h2>Votes so far ({{ votes|length }})</h2>
 <ul>
