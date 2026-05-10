@@ -91,6 +91,7 @@ class Pool(Base):
     governance_config: Mapped[dict[str, Any]] = mapped_column(
         JSON, default=dict, nullable=False
     )
+    webhook_url: Mapped[str | None] = mapped_column(String, nullable=True)
 
 
 class Member(Base):

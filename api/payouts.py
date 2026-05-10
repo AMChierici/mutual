@@ -29,6 +29,7 @@ from api.orm import (
     LedgerKind,
     Payout,
 )
+from api.webhooks import dispatch_event
 
 
 def record_payout(
@@ -103,4 +104,13 @@ def record_payout(
 
     db.commit()
     db.refresh(payout)
+
+    dispatch_event(db, claim.pool_id, "claim.paid", {
+        "claim_id": claim_id,
+        "payout_id": payout.id,
+        "amount_paid_cents": amount_paid_cents,
+        "balance_after_cents": new_balance,
+        "paid_at": paid_at.isoformat(),
+    })
+
     return payout

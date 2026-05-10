@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Settings — Mutual{% endblock %}
+{% block content %}
+<h1>Settings</h1>
+<p><a href="/">← Dashboard</a></p>
+
+<h2>Outbound webhook</h2>
+<p>Mutual posts a small JSON envelope to this URL on lifecycle events:
+   <code>claim.submitted</code>, <code>claim.approved</code>, <code>claim.rejected</code>,
+   <code>claim.paid</code>, and <code>monthly_close.due</code>.
+   Fire-and-log — there are no retries in v0. Failures are recorded in the
+   <a href="/audit">audit log</a> as <code>webhook.dispatched</code> rows.</p>
+
+<form method="post" action="/settings/webhook">
+    <p><label>Webhook URL (http or https; blank to disable)<br>
+        <input name="webhook_url" type="url" value="{{ webhook_url }}"
+               placeholder="https://hooks.example/incoming" size="60"></label></p>
+    <button type="submit">Save</button>
+</form>
+
+<h3>Manual trigger</h3>
+<p>"Monthly close" doesn't fire automatically in v0. Run this on a calendar
+   day that suits your pool — e.g. wire a cron line:
+   <code>0 9 1 * * curl -fsS -X POST -b cookies.txt https://your-host/webhooks/monthly-close</code></p>
+<form method="post" action="/webhooks/monthly-close">
+    <button type="submit">Send "monthly close due" now</button>
+</form>
+{% endblock %}

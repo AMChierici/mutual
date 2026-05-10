@@ -17,6 +17,7 @@ from api.routes_auth import router as auth_router
 from api.routes_claims import router as claims_router
 from api.routes_contributions import router as contributions_router
 from api.routes_dashboard import router as dashboard_router
+from api.routes_settings import router as settings_router
 from api.routes_setup import router as setup_router
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -64,6 +65,7 @@ app.include_router(contributions_router)
 app.include_router(claims_router)
 app.include_router(dashboard_router)
 app.include_router(audit_router)
+app.include_router(settings_router)
 
 
 @app.get("/health")

@@ -21,6 +21,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from api.claims import initial_status_for_amount
+from api.webhooks import dispatch_event
 from api.orm import (
     AuditEvent,
     Claim,
@@ -173,6 +174,25 @@ def cast_vote(
 
     db.commit()
     db.refresh(vote)
+
+    # Outbound webhook on threshold crossing (not on plain vote.cast).
+    if outcome == TallyOutcome.approved:
+        dispatch_event(db, claim.pool_id, "claim.approved", {
+            "claim_id": claim.id,
+            "member_id": claim.member_id,
+            "amount_cents": claim.amount_requested,
+            "scheme": scheme_name,
+            "approve": approve, "reject": reject, "eligible": eligible,
+        })
+    elif outcome == TallyOutcome.rejected:
+        dispatch_event(db, claim.pool_id, "claim.rejected", {
+            "claim_id": claim.id,
+            "member_id": claim.member_id,
+            "amount_cents": claim.amount_requested,
+            "scheme": scheme_name,
+            "approve": approve, "reject": reject, "eligible": eligible,
+        })
+
     return vote
 
 

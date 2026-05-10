@@ -27,6 +27,7 @@ from api.orm import (
     Pool,
 )
 from api.storage import claim_evidence_dir, safe_filename
+from api.webhooks import dispatch_event
 
 
 def initial_status_for_amount(
@@ -135,4 +136,25 @@ def submit_claim(
     )
     db.commit()
     db.refresh(claim)
+
+    # Outbound webhooks (fire-and-log, never raise). ``claim.submitted`` always;
+    # ``claim.approved`` follows immediately when the small tier auto-approves.
+    submitted_payload = {
+        "claim_id": claim.id,
+        "member_id": member_id,
+        "amount_cents": amount_cents,
+        "category": category,
+        "occurred_at": occurred_at.isoformat(),
+        "scheme": scheme,
+        "initial_status": status.value,
+    }
+    dispatch_event(db, pool_id, "claim.submitted", submitted_payload)
+    if status == ClaimStatus.approved:
+        dispatch_event(db, pool_id, "claim.approved", {
+            "claim_id": claim.id,
+            "member_id": member_id,
+            "amount_cents": amount_cents,
+            "scheme": scheme,
+        })
+
     return claim
