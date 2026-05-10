@@ -15,6 +15,7 @@ from api.db import make_engine, make_session_factory
 from api.routes_auth import router as auth_router
 from api.routes_claims import router as claims_router
 from api.routes_contributions import router as contributions_router
+from api.routes_dashboard import router as dashboard_router
 from api.routes_setup import router as setup_router
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -60,17 +61,7 @@ app.include_router(auth_router)
 app.include_router(setup_router)
 app.include_router(contributions_router)
 app.include_router(claims_router)
-
-
-@app.get("/")
-def root():
-    return {
-        "name": "Mutual",
-        "version": "0.1.0",
-        "status": "pre-alpha",
-        "docs": "/docs",
-        "manifesto": "https://github.com/YOU/mutual/blob/main/MANIFESTO.md",
-    }
+app.include_router(dashboard_router)
 
 
 @app.get("/health")

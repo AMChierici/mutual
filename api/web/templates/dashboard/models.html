@@ -1,0 +1,47 @@
+{% extends "dashboard/_layout.html" %}
+{% block tab_content %}
+
+<h2>Pricing — flat</h2>
+<p><em>{{ pricing.rationale }}</em></p>
+<p>Period: <code>{{ pricing.period }}</code></p>
+<table>
+    <thead>
+        <tr><th>Member</th><th>Suggested premium ({{ summary.currency }} / {{ pricing.period }})</th></tr>
+    </thead>
+    <tbody>
+        {% for member_id, premium in pricing.premiums.items() %}
+        <tr>
+            <td>
+                {% if member_id in members_by_id %}
+                    {{ members_by_id[member_id].display_name }}
+                {% else %}
+                    member #{{ member_id }}
+                {% endif %}
+            </td>
+            <td>{{ "%.2f" | format(premium) }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+<h2>Reserving — ruin probability</h2>
+<p><em>{{ reserving.rationale }}</em></p>
+<dl>
+    <dt>Required reserve</dt>
+    <dd>{{ "%.2f" | format(reserving.required_reserve) }} {{ summary.currency }}</dd>
+    <dt>Confidence</dt>
+    <dd>{{ "%.0f" | format(reserving.confidence * 100) }}%</dd>
+</dl>
+
+<h3>Diagnostics</h3>
+<table>
+    <thead><tr><th>Key</th><th>Value</th></tr></thead>
+    <tbody>
+        {% for k, v in reserving.diagnostics.items() %}
+        <tr><td><code>{{ k }}</code></td><td><code>{{ v }}</code></td></tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+<p><small>Models swap in. See <code>models/</code> for new pricing or reserving plug-ins.</small></p>
+{% endblock %}

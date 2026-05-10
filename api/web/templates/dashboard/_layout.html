@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}{{ summary.pool_name }} — Mutual{% endblock %}
+{% block content %}
+<header>
+    <h1>{{ summary.pool_name }}</h1>
+    <p>
+        <strong>Balance:</strong> {{ "%.2f" | format(summary.balance_cents / 100) }} {{ summary.currency }}
+        · <strong>Members:</strong> {{ summary.member_count }}
+        · <strong>Pending claims:</strong> {{ summary.pending_claims_count }}
+    </p>
+    <nav>
+        {% if active_tab == "overview" %}
+            <strong>Overview</strong>
+        {% else %}
+            <a href="/">Overview</a>
+        {% endif %}
+        ·
+        {% if active_tab == "models" %}
+            <strong>Model output</strong>
+        {% else %}
+            <a href="/models">Model output</a>
+        {% endif %}
+    </nav>
+    <p>
+        <a href="/claims">All claims</a>
+        · <a href="/claims/new">+ Submit claim</a>
+        · <a href="/claims/pending">Pending votes</a>
+        {% if is_admin %}
+        · <a href="/contributions/bulk">Record contributions</a>
+        {% endif %}
+    </p>
+</header>
+
+{% block tab_content %}{% endblock %}
+{% endblock %}

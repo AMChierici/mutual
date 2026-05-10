@@ -13,14 +13,6 @@ async def test_health_returns_ok(client):
     assert r.json() == {"ok": True}
 
 
-async def test_root_returns_metadata(client):
-    r = await client.get("/")
-    assert r.status_code == 200
-    body = r.json()
-    assert body["name"] == "Mutual"
-    assert body["version"] == "0.1.0"
-
-
 def test_run_migrations_brings_fresh_db_to_head(tmp_path):
     db_file = tmp_path / "fresh.sqlite"
     engine = create_engine(f"sqlite:///{db_file}", future=True)
