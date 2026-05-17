@@ -14,6 +14,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from api.auth import (
@@ -27,7 +28,7 @@ from api.auth import (
     revoke_session,
 )
 from api.deps import get_db
-from api.orm import AuditEvent, Member
+from api.orm import AuditEvent, Membership
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -60,18 +61,24 @@ def login(token: str, request: Request, db: Session = Depends(get_db)) -> HTMLRe
         ).body
         return HTMLResponse(content=body, status_code=status.HTTP_400_BAD_REQUEST)
 
-    member = db.get(Member, auth_session.member_id)
-    _audit(
-        db,
-        pool_id=member.pool_id,
-        actor_id=member.id,
-        kind="auth.login",
-        payload={"auth_session_id": auth_session.id},
-    )
+    # Pick the user's first active membership for the audit + welcome view.
+    # Single-pool installs (M1) have exactly one. M2 will instead show a
+    # pool picker for users in multiple pools.
+    membership = db.scalars(
+        select(Membership).where(Membership.user_id == auth_session.user_id).order_by(Membership.id)
+    ).first()
+    if membership is not None:
+        _audit(
+            db,
+            pool_id=membership.pool_id,
+            actor_id=membership.id,
+            kind="auth.login",
+            payload={"auth_session_id": auth_session.id},
+        )
 
     templates = request.app.state.templates
     response: HTMLResponse = templates.TemplateResponse(
-        request, "auth/login_success.html", {"member": member}
+        request, "auth/login_success.html", {"member": membership}
     )
     response.set_cookie(
         key=SESSION_COOKIE,
@@ -94,13 +101,17 @@ def logout(request: Request, db: Session = Depends(get_db)) -> HTMLResponse:
         # or expired session — we audit only on a live revoke.
         live = resolve_session(db, cookie)
         if live is not None:
-            member = db.get(Member, live.member_id)
+            membership = db.scalars(
+                select(Membership)
+                .where(Membership.user_id == live.user_id)
+                .order_by(Membership.id)
+            ).first()
             revoke_session(db, cookie)
-            if member is not None:
+            if membership is not None:
                 _audit(
                     db,
-                    pool_id=member.pool_id,
-                    actor_id=member.id,
+                    pool_id=membership.pool_id,
+                    actor_id=membership.id,
                     kind="auth.logout",
                     payload={"auth_session_id": live.id},
                 )
@@ -116,12 +127,12 @@ def create_magic_link(
     payload: MagicLinkRequest,
     request: Request,
     db: Session = Depends(get_db),
-    admin: Member = Depends(require_admin),
+    admin: Membership = Depends(require_admin),
 ) -> JSONResponse:
-    target = db.get(Member, payload.member_id)
+    target = db.get(Membership, payload.member_id)
     if target is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "member not found")
-    tok = create_login_token(db, target.id)
+    tok = create_login_token(db, target.user_id)
     _audit(
         db,
         pool_id=admin.pool_id,

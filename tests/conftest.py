@@ -15,9 +15,14 @@ from sqlalchemy import create_engine, event
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
 
-from api.auth import SESSION_COOKIE, create_login_token, consume_login_token
+from api.auth import SESSION_COOKIE, consume_login_token, create_login_token
 from api.db import Base, make_session_factory
-from api.orm import Member, MemberRole, MemberStatus, Pool
+from api.orm import Membership, MemberRole, MemberStatus, Pool, User
+
+# Test-suite alias: many test files still spell this ``Member``. After M1
+# the class is ``Membership``; re-export under the old name so test
+# imports continue to work without churning every file.
+Member = Membership
 
 
 @pytest.fixture
@@ -71,6 +76,7 @@ async def client(app_with_db) -> AsyncIterator[AsyncClient]:
 @pytest.fixture
 def pool(session) -> Pool:
     p = Pool(
+        slug="test-pool",
         name="Test Pool",
         currency="USD",
         governance_config={
@@ -86,53 +92,74 @@ def pool(session) -> Pool:
     return p
 
 
-@pytest.fixture
-def admin(session, pool) -> Member:
-    m = Member(
+def _make_member(
+    session: Session,
+    pool: Pool,
+    *,
+    display_name: str,
+    role: MemberRole,
+    status: MemberStatus,
+    email: str | None = None,
+) -> Membership:
+    user = User(
+        email=email or f"{display_name.lower()}-{pool.id}@example.test",
+        display_name=display_name,
+    )
+    session.add(user)
+    session.flush()
+    m = Membership(
+        user_id=user.id,
         pool_id=pool.id,
+        display_name=display_name,
+        role=role,
+        status=status,
+    )
+    session.add(m)
+    session.commit()
+    return m
+
+
+@pytest.fixture
+def admin(session, pool) -> Membership:
+    return _make_member(
+        session,
+        pool,
         display_name="Admin",
         role=MemberRole.admin,
         status=MemberStatus.active,
     )
-    session.add(m)
-    session.commit()
-    return m
 
 
 @pytest.fixture
-def member(session, pool) -> Member:
-    m = Member(
-        pool_id=pool.id,
+def member(session, pool) -> Membership:
+    return _make_member(
+        session,
+        pool,
         display_name="Bo",
         role=MemberRole.member,
         status=MemberStatus.invited,
     )
-    session.add(m)
-    session.commit()
-    return m
 
 
 @pytest_asyncio.fixture
 async def admin_client(client, session, admin) -> AsyncClient:
     """An HTTP client carrying a valid admin session cookie."""
-    tok = create_login_token(session, admin.id)
+    tok = create_login_token(session, admin.user_id)
     auth_session = consume_login_token(session, tok.token)
     client.cookies.set(SESSION_COOKIE, auth_session.token)
     return client
 
 
 @pytest.fixture
-def members(session, pool) -> list[Member]:
+def members(session, pool) -> list[Membership]:
     """Three active members for tests that need multiple participants."""
-    out: list[Member] = []
-    for name in ("Bo", "Cy", "Di"):
-        m = Member(
-            pool_id=pool.id,
+    return [
+        _make_member(
+            session,
+            pool,
             display_name=name,
             role=MemberRole.member,
             status=MemberStatus.active,
         )
-        session.add(m)
-        out.append(m)
-    session.commit()
-    return out
+        for name in ("Bo", "Cy", "Di")
+    ]

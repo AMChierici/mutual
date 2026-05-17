@@ -18,6 +18,7 @@ from api.orm import (
     MemberRole,
     MemberStatus,
     Pool,
+    User,
 )
 
 
@@ -184,11 +185,14 @@ def test_record_contribution_rejects_unknown_member(session, pool, admin):
 
 def test_record_contribution_rejects_member_in_different_pool(session, admin):
     """Belt-and-suspenders for when v1 multi-pool lands."""
-    other_pool = Pool(name="Other", currency="USD", governance_config={})
+    other_pool = Pool(slug="other-pool", name="Other", currency="USD", governance_config={})
     session.add(other_pool)
     session.commit()
+    foreign_user = User(email="foreign@example.test", display_name="Foreign")
+    session.add(foreign_user)
+    session.flush()
     other_member = Member(
-        pool_id=other_pool.id, display_name="Foreign",
+        user_id=foreign_user.id, pool_id=other_pool.id, display_name="Foreign",
         role=MemberRole.member, status=MemberStatus.active,
     )
     session.add(other_member)
@@ -311,11 +315,14 @@ def test_record_bulk_rejects_invalid_period(session, pool, admin, members):
 
 
 def test_record_bulk_skips_members_in_other_pools(session, pool, admin, members):
-    other_pool = Pool(name="Other", currency="USD", governance_config={})
+    other_pool = Pool(slug="bulk-other", name="Other", currency="USD", governance_config={})
     session.add(other_pool)
     session.commit()
+    foreign_user = User(email="bulk-foreign@example.test", display_name="X")
+    session.add(foreign_user)
+    session.flush()
     foreign = Member(
-        pool_id=other_pool.id, display_name="X",
+        user_id=foreign_user.id, pool_id=other_pool.id, display_name="X",
         role=MemberRole.member, status=MemberStatus.active,
     )
     session.add(foreign)

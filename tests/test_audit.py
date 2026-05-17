@@ -103,7 +103,7 @@ def test_list_audit_events_caps_at_limit(session, pool, admin):
 def test_list_audit_events_filters_to_pool(session, pool, admin):
     """Insert an audit event for a different pool; the listing must skip it."""
     from api.orm import Pool
-    other = Pool(name="O", currency="USD", governance_config={})
+    other = Pool(slug="audit-other", name="O", currency="USD", governance_config={})
     session.add(other)
     session.commit()
     session.add(

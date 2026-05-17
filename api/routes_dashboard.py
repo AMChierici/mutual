@@ -21,7 +21,7 @@ from api.dashboard import (
 )
 from api.dashboard_models import compute_pricing, compute_reserving
 from api.deps import get_db
-from api.orm import Member, MemberStatus, Pool
+from api.orm import Member, Membership, MemberStatus, Pool
 
 router = APIRouter(tags=["dashboard"])
 
@@ -33,7 +33,7 @@ def _get_pool_or_redirect(db: Session) -> Pool | RedirectResponse:
     return pool
 
 
-def _current_member_strict(request: Request, db: Session) -> Member:
+def _current_member_strict(request: Request, db: Session, pool: Pool) -> Membership:
     """Like ``api.auth.current_member`` but used by routes that handle the
     no-pool redirect themselves before authenticating."""
     cookie = request.cookies.get(SESSION_COOKIE)
@@ -41,10 +41,14 @@ def _current_member_strict(request: Request, db: Session) -> Member:
     if auth_session is None:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "not authenticated")
     refresh_session(db, auth_session)
-    member = db.get(Member, auth_session.member_id)
-    if member is None or member.status != MemberStatus.active:
+    membership = db.scalars(
+        select(Membership)
+        .where(Membership.user_id == auth_session.user_id)
+        .where(Membership.pool_id == pool.id)
+    ).one_or_none()
+    if membership is None or membership.status != MemberStatus.active:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "member not active")
-    return member
+    return membership
 
 
 @router.get("/", response_class=HTMLResponse)
@@ -58,7 +62,7 @@ def overview(
         return pool_or_redirect
     pool = pool_or_redirect
 
-    member = _current_member_strict(request, db)
+    member = _current_member_strict(request, db, pool)
 
     bucket_by = bucket if bucket in ("period", "recorded_at") else DEFAULT_BUCKET_BY
     summary = overview_summary(db, pool.id)
@@ -98,7 +102,7 @@ def models_tab(request: Request, db: Session = Depends(get_db)):
         return pool_or_redirect
     pool = pool_or_redirect
 
-    member = _current_member_strict(request, db)
+    member = _current_member_strict(request, db, pool)
 
     pricing = compute_pricing(db, pool.id)
     reserving = compute_reserving(db, pool.id, simulations=1000, seed=0)

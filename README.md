@@ -129,7 +129,17 @@ Known gaps documented in [`docs/getting-started.md`](docs/getting-started.md):
 
 - No member-management UI yet — invite via shell snippet
 - No built-in email notifications — wire the outbound webhook to a bot
-- One pool per install — multi-pool is post-v0
+- One pool per install today; multi-pool is in progress (see below)
+
+**Upgrading from a v0 (pre-multi-account) install:** the next migration
+(`alembic upgrade head`) is M1 of the multi-account expansion. It adds a
+`users` table, renames `members` → `memberships`, gives each pool a slug,
+and rewires auth tokens to bind to a user instead of a single membership.
+Existing data is auto-migrated: the one existing pool gets a slug derived
+from its name, and members without an email get a placeholder
+`user+<id>@local.invalid` so the new `users.email UNIQUE NOT NULL`
+constraint holds. UI is unchanged in M1; multi-pool URLs and admin
+screens land in the following milestones.
 
 We're running it on real family pools to find the sharp edges. **Don't
 trust it with money you can't afford to lose track of yet.**

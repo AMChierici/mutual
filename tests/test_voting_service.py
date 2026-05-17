@@ -200,12 +200,15 @@ def test_cast_vote_rejects_inactive_voter(session, pool, admin, members):
 
 
 def test_cast_vote_rejects_member_in_other_pool(session, pool, admin):
-    from api.orm import Pool
-    other = Pool(name="O", currency="USD", governance_config=pool.governance_config)
+    from api.orm import Pool, User
+    other = Pool(slug="vote-other", name="O", currency="USD", governance_config=pool.governance_config)
     session.add(other)
     session.commit()
+    foreign_user = User(email="vote-foreign@example.test", display_name="X")
+    session.add(foreign_user)
+    session.flush()
     foreign = Member(
-        pool_id=other.id, display_name="X",
+        user_id=foreign_user.id, pool_id=other.id, display_name="X",
         role=MemberRole.member, status=MemberStatus.active,
     )
     session.add(foreign)
