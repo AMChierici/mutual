@@ -55,6 +55,21 @@ That's it for the install. The container runs Alembic migrations on startup
 so the database is ready before the first request. Visit
 `http://localhost:8000` and you'll be redirected to `/setup`.
 
+### One-tap cloud deploy (phone-friendly)
+
+If you want a public HTTPS URL to install the PWA on a phone, the repo
+ships a [Render](https://render.com) blueprint:
+
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/AMChierici/mutual)
+
+Render reads [`render.yaml`](render.yaml), provisions a 1 GB persistent
+disk for the SQLite file, sets `MUTUAL_DB_PATH`, and prompts for the
+optional `MUTUAL_PLATFORM_ADMIN_EMAIL`. Total time from tap to live
+URL: about three minutes. The Starter plan ($7/mo) keeps the service
+warm; the disk runs about $0.25/mo per GB. (Free tier is not viable —
+Render's free hosts have no persistent disk, so SQLite resets on every
+cold start.)
+
 For a complete first-day walkthrough — including a real 4-person family
 example, the weekly rhythm, and how to invite the rest of your group — read
 **[`docs/getting-started.md`](docs/getting-started.md)**. It's the right
