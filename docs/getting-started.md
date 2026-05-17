@@ -95,29 +95,28 @@ device or after clearing cookies.
 
 ## Inviting the rest of your family
 
-There's no member-management UI in v0 yet (it's the next thing on the roadmap).
-For now, mint each member's magic link from the shell:
+Open <code>/pools/{your-slug}/members</code> as a pool admin. From there:
 
-```bash
-docker compose exec mutual python -c "
-from api.db import make_engine, make_session_factory
-from api.auth import create_login_token
-from api.orm import Member
+- **Invite a member** (`+ Invite a member` button) — give a display name,
+  an email address (the global account identity; one person, one email
+  across all the pools they're in), and a role. Mutual creates the
+  membership in `invited` status and mints a single-use, 24-hour magic
+  link. Copy the link out of the success page and send it through
+  whatever channel you use (Signal, WhatsApp, SMS, email-via-bot). When
+  the recipient opens the link, their membership flips to `active` and
+  they're signed in for 30 days.
+- **Change someone's role** — pick `admin`, `member`, or `observer`
+  from the dropdown and save. The pool can't drop below one active
+  admin, so the last admin can't demote themselves.
+- **Deactivate someone** — set their status to `inactive`. Same
+  last-admin guard applies. Inactive members keep their history (claims,
+  votes, contributions) intact, just can't log in.
+- **Re-issue a magic link** — for someone who lost theirs. The button
+  on the row mints a fresh 24-hour link and surfaces it.
 
-engine = make_engine()
-SessionLocal = make_session_factory(engine)
-with SessionLocal() as s:
-    print('Members:')
-    for m in s.query(Member).all():
-        print(f'  {m.id}: {m.display_name} ({m.role.value}, {m.status.value})')
-    member_id = int(input('Mint a link for which member id? '))
-    tok = create_login_token(s, member_id)
-    print(f'URL: http://localhost:8000/auth/login/{tok.token}')
-"
-```
-
-Copy each URL into Signal/SMS/email/whatever channel you use. Each person
-clicks it once, lands on the dashboard, and stays logged in for 30 days.
+If you're inviting someone who already has a Mutual account on another
+pool on this install, Mutual recognises the email and attaches the new
+membership to their existing account — they don't need a second login.
 
 ## Weekly rhythm
 

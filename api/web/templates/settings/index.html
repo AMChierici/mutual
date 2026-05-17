@@ -1,28 +1,70 @@
 {% extends "base.html" %}
-{% block title %}Settings — Mutual{% endblock %}
+{% block title %}Settings — {{ pool.name }} — Mutual{% endblock %}
 {% block content %}
 <h1>Settings — {{ pool.name }}</h1>
-<p><a href="/pools/{{ pool.slug }}/">← Dashboard</a></p>
+<p><a href="/pools/{{ pool.slug }}/">← Dashboard</a>
+    · <a href="/pools/{{ pool.slug }}/members">Members</a></p>
 
-<h2>Outbound webhook</h2>
-<p>Mutual posts a small JSON envelope to this URL on lifecycle events:
-   <code>claim.submitted</code>, <code>claim.approved</code>, <code>claim.rejected</code>,
-   <code>claim.paid</code>, and <code>monthly_close.due</code>.
-   Fire-and-log — there are no retries in v0. Failures are recorded in the
-   <a href="/pools/{{ pool.slug }}/audit">audit log</a> as <code>webhook.dispatched</code> rows.</p>
+{% if flash %}<p class="flash"><strong>{{ flash }}</strong></p>{% endif %}
+{% if error %}<p class="error"><strong>{{ error }}</strong></p>{% endif %}
 
-<form method="post" action="/pools/{{ pool.slug }}/settings/webhook">
-    <p><label>Webhook URL (http or https; blank to disable)<br>
-        <input name="webhook_url" type="url" value="{{ webhook_url }}"
-               placeholder="https://hooks.example/incoming" size="60"></label></p>
-    <button type="submit">Save</button>
-</form>
+<section class="card">
+    <h2>Pool identity</h2>
+    <p>The slug is what shows up in URLs (e.g.
+       <code>/pools/{{ pool.slug }}/...</code>). Renaming the slug
+       updates every link, but ledger entries and audit history are
+       keyed by pool id internally — none of that is lost.</p>
+    <form method="post" action="/pools/{{ pool.slug }}/settings/identity">
+        <p><label>Pool name<br>
+            <input name="pool_name" value="{{ pool.name }}" required></label></p>
+        <p><label>Slug<br>
+            <input name="slug" value="{{ pool.slug }}"
+                   pattern="[a-z0-9-]+" required></label></p>
+        <button type="submit">Save identity</button>
+    </form>
+</section>
 
-<h3>Manual trigger</h3>
-<p>"Monthly close" doesn't fire automatically in v0. Run this on a calendar
-   day that suits your pool — e.g. wire a cron line:
-   <code>0 9 1 * * curl -fsS -X POST -b cookies.txt https://your-host/pools/{{ pool.slug }}/webhooks/monthly-close</code></p>
-<form method="post" action="/pools/{{ pool.slug }}/webhooks/monthly-close">
-    <button type="submit">Send "monthly close due" now</button>
-</form>
+<section class="card">
+    <h2>Outbound webhook</h2>
+    <p>Mutual posts a small JSON envelope to this URL on lifecycle events:
+       <code>claim.submitted</code>, <code>claim.approved</code>,
+       <code>claim.rejected</code>, <code>claim.paid</code>, and
+       <code>monthly_close.due</code>. Fire-and-log — there are no retries.
+       Failures are recorded in the
+       <a href="/pools/{{ pool.slug }}/audit">audit log</a> as
+       <code>webhook.dispatched</code> rows.</p>
+
+    <form method="post" action="/pools/{{ pool.slug }}/settings/webhook">
+        <p><label>Webhook URL (http or https; blank to disable)<br>
+            <input name="webhook_url" type="url" value="{{ webhook_url }}"
+                   placeholder="https://hooks.example/incoming" size="60"></label></p>
+        <button type="submit">Save webhook</button>
+    </form>
+
+    <h3>Manual monthly-close trigger</h3>
+    <p>"Monthly close" doesn't fire automatically. Run it on the calendar
+       day that suits your pool — wire e.g.
+       <code>0 9 1 * * curl -fsS -X POST -b cookies.txt https://your-host/pools/{{ pool.slug }}/webhooks/monthly-close</code></p>
+    <form method="post" action="/pools/{{ pool.slug }}/webhooks/monthly-close">
+        <button type="submit">Send "monthly close due" now</button>
+    </form>
+</section>
+
+<section class="card">
+    <h2>Governance</h2>
+    <p>Tiers are defined at setup; editing them after launch is a roadmap
+       item. Current tiers (read-only):</p>
+    <ol>
+        {% for t in pool.governance_config.get("tiers", []) %}
+        <li>
+            {% if t.max_amount_cents is none %}
+                catch-all → <code>{{ t.scheme }}</code>
+            {% else %}
+                up to {{ "%.2f" | format(t.max_amount_cents / 100) }} {{ pool.currency }}
+                → <code>{{ t.scheme }}</code>
+            {% endif %}
+        </li>
+        {% endfor %}
+    </ol>
+</section>
 {% endblock %}

@@ -128,7 +128,6 @@ and **recorded date** (when the row was written).
 
 Known gaps documented in [`docs/getting-started.md`](docs/getting-started.md):
 
-- No member-management UI yet — invite via shell snippet
 - No built-in email notifications — wire the outbound webhook to a bot
 - No platform-admin view yet (the cross-pool operator dashboard)
 
