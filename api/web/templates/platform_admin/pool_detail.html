@@ -1,0 +1,80 @@
+{% extends "platform_admin/_layout.html" %}
+{% block admin_content %}
+<h2>{{ pool.name }}</h2>
+<p><strong>Slug:</strong> <code>{{ pool.slug }}</code>
+    · <strong>Currency:</strong> {{ pool.currency }}
+    · <strong>Balance:</strong> {{ "%.2f" | format(balance_cents / 100) }} {{ pool.currency }}
+    · <strong>Created:</strong> {{ pool.created_at.strftime("%Y-%m-%d") }}</p>
+<p><a href="/admin/pools">← All pools</a></p>
+
+<section>
+    <h3>Members</h3>
+    {% if not member_rows %}
+    <p>No members.</p>
+    {% else %}
+    <table>
+        <thead>
+            <tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th></tr>
+        </thead>
+        <tbody>
+            {% for row in member_rows %}
+            <tr>
+                <td>{{ row.membership.display_name }}</td>
+                <td>{{ row.email }}</td>
+                <td>{{ row.membership.role.value }}</td>
+                <td>{{ row.membership.status.value }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% endif %}
+</section>
+
+<section>
+    <h3>Recent claims (up to 20)</h3>
+    {% if not claim_rows %}
+    <p>No claims.</p>
+    {% else %}
+    <table>
+        <thead>
+            <tr>
+                <th>#</th>
+                <th>Status</th>
+                <th>Amount</th>
+                <th>Category</th>
+                <th>Description</th>
+                <th>Evidence</th>
+                <th>Occurred</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for c in claim_rows %}
+            <tr>
+                <td>{{ c.id }}</td>
+                <td><code>{{ c.status }}</code></td>
+                <td>{{ "%.2f" | format(c.amount_cents / 100) }} {{ pool.currency }}</td>
+                <td>{{ c.category }}</td>
+                <td>{{ c.description }}</td>
+                <td>{{ c.evidence_count }}</td>
+                <td>{{ c.occurred_at.strftime("%Y-%m-%d") }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% endif %}
+</section>
+
+<section>
+    <h3>Recent audit events (up to 20)</h3>
+    {% if not audit_events %}
+    <p>No events.</p>
+    {% else %}
+    <ul>
+        {% for e in audit_events %}
+        <li><code>{{ e.recorded_at.strftime("%Y-%m-%d %H:%M") }}</code>
+            <code>{{ e.kind }}</code></li>
+        {% endfor %}
+    </ul>
+    {% endif %}
+</section>
+{% endblock %}

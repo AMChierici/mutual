@@ -129,7 +129,11 @@ and **recorded date** (when the row was written).
 Known gaps documented in [`docs/getting-started.md`](docs/getting-started.md):
 
 - No built-in email notifications — wire the outbound webhook to a bot
-- No platform-admin view yet (the cross-pool operator dashboard)
+- No PWA / mobile manifest yet — that's the next milestone
+
+For self-hosters running multiple pools on one box, see
+[`docs/platform-admin.md`](docs/platform-admin.md) for the operator
+view (read-only, opt-in via `MUTUAL_PLATFORM_ADMIN_EMAIL`).
 
 **Upgrading from a v0 (pre-multi-account) install:** running
 `alembic upgrade head` migrates an existing single-pool install into the

@@ -1,7 +1,9 @@
 """Mutual API entry point."""
 from __future__ import annotations
 
+import os
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 from pathlib import Path
 
 from alembic import command
@@ -15,7 +17,7 @@ from sqlalchemy import Engine, select
 
 from api.auth import SESSION_COOKIE, resolve_session
 from api.db import make_engine, make_session_factory
-from api.orm import Membership, MemberStatus, Pool
+from api.orm import Membership, MemberStatus, Pool, User
 from api.routes_account import router as account_router
 from api.routes_audit import router as audit_router
 from api.routes_auth import router as auth_router
@@ -24,6 +26,7 @@ from api.routes_contributions import router as contributions_router
 from api.routes_dashboard import router as dashboard_router
 from api.routes_login import router as login_router
 from api.routes_members import router as members_router
+from api.routes_platform_admin import router as platform_admin_router
 from api.routes_settings import router as settings_router
 from api.routes_setup import router as setup_router
 
@@ -44,6 +47,35 @@ def run_migrations(engine: Engine) -> None:
     command.upgrade(cfg, "head")
 
 
+PLATFORM_ADMIN_EMAIL_ENV = "MUTUAL_PLATFORM_ADMIN_EMAIL"
+PLATFORM_ADMIN_PII_ENV = "MUTUAL_PLATFORM_ADMIN_SEES_PII"
+
+
+def ensure_platform_admin(session_factory) -> None:
+    """If ``MUTUAL_PLATFORM_ADMIN_EMAIL`` is set, mark that ``User`` as a
+    platform admin (creating the row with no memberships if needed).
+
+    Idempotent. Runs on every startup so rotating the env var to a new
+    operator is a single restart away.
+    """
+    email = os.environ.get(PLATFORM_ADMIN_EMAIL_ENV, "").strip().lower()
+    if not email:
+        return
+    with session_factory() as db:
+        user = db.scalars(select(User).where(User.email == email)).one_or_none()
+        if user is None:
+            user = User(
+                email=email,
+                display_name="Platform Admin",
+                is_platform_admin=True,
+                created_at=datetime.now(timezone.utc),
+            )
+            db.add(user)
+        elif not user.is_platform_admin:
+            user.is_platform_admin = True
+        db.commit()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     engine = make_engine()
@@ -51,6 +83,7 @@ async def lifespan(app: FastAPI):
     app.state.engine = engine
     app.state.session_factory = make_session_factory(engine)
     app.state.templates = Jinja2Templates(directory=str(WEB_DIR / "templates"))
+    ensure_platform_admin(app.state.session_factory)
     try:
         yield
     finally:
@@ -76,6 +109,7 @@ app.include_router(dashboard_router)
 app.include_router(audit_router)
 app.include_router(settings_router)
 app.include_router(members_router)
+app.include_router(platform_admin_router)
 
 
 # ---------------------------------------------------------------------------

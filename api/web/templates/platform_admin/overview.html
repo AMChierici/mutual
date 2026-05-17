@@ -1,0 +1,33 @@
+{% extends "platform_admin/_layout.html" %}
+{% block admin_content %}
+<section>
+    <h2>Totals</h2>
+    <p><strong>{{ pool_count }}</strong> pool{{ '' if pool_count == 1 else 's' }}
+       · <strong>{{ user_count }}</strong> user{{ '' if user_count == 1 else 's' }}</p>
+</section>
+
+<section>
+    <h2>Pools</h2>
+    {% if not rows %}
+    <p>No pools yet.</p>
+    {% else %}
+    <table>
+        <thead>
+            <tr><th>Pool</th><th>Slug</th><th>Currency</th><th>Members</th><th>Balance</th><th>Created</th></tr>
+        </thead>
+        <tbody>
+            {% for row in rows %}
+            <tr>
+                <td><a href="/admin/pools/{{ row.pool.id }}">{{ row.pool.name }}</a></td>
+                <td><code>{{ row.pool.slug }}</code></td>
+                <td>{{ row.pool.currency }}</td>
+                <td>{{ row.member_count }}</td>
+                <td>{{ "%.2f" | format(row.balance_cents / 100) }} {{ row.pool.currency }}</td>
+                <td>{{ row.pool.created_at.strftime("%Y-%m-%d") }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% endif %}
+</section>
+{% endblock %}

@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}Platform admin — Mutual{% endblock %}
+{% block content %}
+<header>
+    <h1>Platform admin</h1>
+    <nav>
+        <a href="/admin">Overview</a>
+        · <a href="/admin/pools">Pools</a>
+        · <a href="/admin/users">Users</a>
+        · <a href="/pools/">My pools</a>
+    </nav>
+    {% if not allow_pii %}
+    <p><small>PII redacted. Set
+       <code>MUTUAL_PLATFORM_ADMIN_SEES_PII=1</code> and restart to view
+       claim descriptions, evidence, and full email addresses.</small></p>
+    {% else %}
+    <p><small><strong>PII visible</strong> — handle with care.</small></p>
+    {% endif %}
+</header>
+{% block admin_content %}{% endblock %}
+{% endblock %}

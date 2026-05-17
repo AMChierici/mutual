@@ -226,6 +226,18 @@ def require_pool_admin(
     return membership
 
 
+def require_platform_admin(user: User = Depends(current_user)) -> User:
+    """Cross-pool operator role.
+
+    Set via the ``MUTUAL_PLATFORM_ADMIN_EMAIL`` env var at startup (see
+    ``api.main.ensure_platform_admin``). A platform admin can read across
+    every pool; they are not implicitly a *member* of any pool.
+    """
+    if not user.is_platform_admin:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "platform admin required")
+    return user
+
+
 def optional_current_member(
     request: Request, db: Session = Depends(get_db)
 ) -> Membership | None:

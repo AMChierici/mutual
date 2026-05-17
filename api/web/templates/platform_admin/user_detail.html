@@ -1,0 +1,82 @@
+{% extends "platform_admin/_layout.html" %}
+{% block admin_content %}
+<h2>{{ subject.display_name }}</h2>
+<p><strong>Email:</strong> {{ subject_email }}
+    · <strong>Platform admin:</strong> {{ "yes" if subject.is_platform_admin else "no" }}
+    · <strong>Created:</strong> {{ subject.created_at.strftime("%Y-%m-%d") }}</p>
+<p><a href="/admin/users">← All users</a></p>
+
+<section>
+    <h3>Memberships</h3>
+    {% if not membership_rows %}
+    <p>No memberships.</p>
+    {% else %}
+    <table>
+        <thead>
+            <tr><th>Pool</th><th>Display name</th><th>Role</th><th>Status</th><th>Joined</th></tr>
+        </thead>
+        <tbody>
+            {% for row in membership_rows %}
+            <tr>
+                <td>
+                    {% if row.pool %}
+                    <a href="/admin/pools/{{ row.pool.id }}">{{ row.pool.name }}</a>
+                    ({{ row.pool.slug }})
+                    {% else %}—{% endif %}
+                </td>
+                <td>{{ row.membership.display_name }}</td>
+                <td>{{ row.membership.role.value }}</td>
+                <td>{{ row.membership.status.value }}</td>
+                <td>{{ row.membership.joined_at.strftime("%Y-%m-%d") }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% endif %}
+</section>
+
+<section>
+    <h3>Recent sessions (up to 10)</h3>
+    {% if not recent_sessions %}
+    <p>No sessions on file.</p>
+    {% else %}
+    <table>
+        <thead>
+            <tr><th>Created</th><th>Last seen</th><th>Expires</th><th>Revoked</th></tr>
+        </thead>
+        <tbody>
+            {% for s in recent_sessions %}
+            <tr>
+                <td>{{ s.created_at.strftime("%Y-%m-%d %H:%M") }}</td>
+                <td>{{ s.last_seen_at.strftime("%Y-%m-%d %H:%M") }}</td>
+                <td>{{ s.expires_at.strftime("%Y-%m-%d") }}</td>
+                <td>{{ s.revoked_at.strftime("%Y-%m-%d %H:%M") if s.revoked_at else "—" }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% endif %}
+</section>
+
+<section>
+    <h3>Recent magic links (up to 10)</h3>
+    {% if not recent_tokens %}
+    <p>No links minted.</p>
+    {% else %}
+    <table>
+        <thead>
+            <tr><th>Created</th><th>Expires</th><th>Used</th></tr>
+        </thead>
+        <tbody>
+            {% for t in recent_tokens %}
+            <tr>
+                <td>{{ t.created_at.strftime("%Y-%m-%d %H:%M") }}</td>
+                <td>{{ t.expires_at.strftime("%Y-%m-%d %H:%M") }}</td>
+                <td>{{ t.used_at.strftime("%Y-%m-%d %H:%M") if t.used_at else "unused" }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% endif %}
+</section>
+{% endblock %}

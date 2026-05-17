@@ -16,6 +16,10 @@
 <p><a href="/pools/new">+ Create another pool</a></p>
 {% endif %}
 
+{% if user.is_platform_admin %}
+<p><a href="/admin">Platform admin →</a></p>
+{% endif %}
+
 <form method="post" action="/auth/logout">
     <button type="submit">Sign out</button>
 </form>
