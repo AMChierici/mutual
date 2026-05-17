@@ -1,0 +1,264 @@
+/* Mutual — mobile-first single-file CSS.
+ *
+ * Tokens, then layout, then components. No framework.
+ *
+ * Design notes:
+ *  - 16px base font; everything in rem so user OS settings respect.
+ *  - 360px-friendly: layouts collapse to single-column below 768px,
+ *    side-by-side above.
+ *  - HTMX-friendly: indeterminate <select>, <button>, and <form>
+ *    elements get a subtle transition during the .htmx-request state.
+ */
+
+/* ------------------------------------------------------------------ */
+/* tokens */
+/* ------------------------------------------------------------------ */
+:root {
+  --bg:           #faf6ee;
+  --surface:      #ffffff;
+  --ink:          #1c1c1c;
+  --ink-soft:     #555;
+  --rule:         #d8d2c2;
+  --accent:       #1aa260;     /* mutual green */
+  --accent-ink:   #ffffff;
+  --warn:         #c81e1e;
+  --warn-soft:    #fdecec;
+  --radius:       6px;
+  --pad:          0.75rem;
+  --pad-lg:       1.25rem;
+  --font-sans:    system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono:    ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg:         #16181a;
+    --surface:    #1f2226;
+    --ink:        #e9e9e9;
+    --ink-soft:   #aaa;
+    --rule:       #333;
+    --accent:     #2bce7b;
+    --warn:       #ff6464;
+    --warn-soft:  #3a1c1c;
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* base */
+/* ------------------------------------------------------------------ */
+* { box-sizing: border-box; }
+
+html { font-size: 16px; -webkit-text-size-adjust: 100%; }
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  color: var(--ink);
+  background: var(--bg);
+  line-height: 1.45;
+}
+
+main {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: var(--pad);
+  padding-bottom: 4.5rem;  /* room for the bottom nav on phones */
+}
+
+@media (min-width: 768px) {
+  main { padding: var(--pad-lg); padding-bottom: var(--pad-lg); }
+}
+
+h1, h2, h3 {
+  line-height: 1.2;
+  margin-top: 1.25em;
+  margin-bottom: 0.5em;
+}
+h1 { font-size: 1.5rem; }
+h2 { font-size: 1.25rem; }
+h3 { font-size: 1.05rem; }
+
+p { margin: 0.6em 0; }
+
+code, pre {
+  font-family: var(--font-mono);
+  font-size: 0.95em;
+  background: var(--surface);
+  padding: 0.1em 0.3em;
+  border-radius: 4px;
+}
+
+pre {
+  padding: 0.6em 0.8em;
+  overflow-x: auto;
+  word-break: break-all;
+  white-space: pre-wrap;
+}
+
+a {
+  color: var(--accent);
+  text-decoration: none;
+}
+a:hover, a:focus-visible { text-decoration: underline; }
+
+hr { border: 0; border-top: 1px solid var(--rule); margin: 1.25em 0; }
+
+/* ------------------------------------------------------------------ */
+/* forms */
+/* ------------------------------------------------------------------ */
+label { display: inline-block; }
+
+input[type="text"],
+input[type="email"],
+input[type="url"],
+input[type="number"],
+input[type="password"],
+input[type="date"],
+input:not([type]),
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  padding: 0.55em 0.65em;
+  width: 100%;
+  max-width: 28rem;
+  display: block;
+  margin-top: 0.25em;
+}
+
+textarea { min-height: 6em; }
+
+input:focus, select:focus, textarea:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+  border-color: var(--accent);
+}
+
+button, [type="submit"] {
+  font: inherit;
+  cursor: pointer;
+  background: var(--accent);
+  color: var(--accent-ink);
+  border: 0;
+  border-radius: var(--radius);
+  padding: 0.6em 1em;
+  min-height: 44px;       /* iOS Human Interface Guidelines tap target */
+  margin: 0.25em 0;
+}
+button:disabled { opacity: 0.5; cursor: not-allowed; }
+button.secondary {
+  background: transparent;
+  color: var(--accent);
+  border: 1px solid var(--accent);
+}
+
+fieldset {
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  padding: var(--pad);
+  margin: var(--pad) 0;
+}
+legend { padding: 0 0.4em; font-weight: 600; }
+
+/* ------------------------------------------------------------------ */
+/* tables — readable on a phone */
+/* ------------------------------------------------------------------ */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0.5em 0 1em;
+  display: block;
+  overflow-x: auto;       /* let wide tables scroll horizontally on phones */
+  white-space: nowrap;
+}
+@media (min-width: 768px) {
+  table { display: table; white-space: normal; }
+}
+th, td {
+  text-align: left;
+  padding: 0.5em 0.6em;
+  border-bottom: 1px solid var(--rule);
+  vertical-align: top;
+}
+th { font-weight: 600; }
+
+/* ------------------------------------------------------------------ */
+/* navigation */
+/* ------------------------------------------------------------------ */
+header > nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4em 0.8em;
+  margin: 0.4em 0;
+}
+header > nav strong { color: var(--ink); }
+header > nav a {
+  white-space: nowrap;
+}
+
+/* ------------------------------------------------------------------ */
+/* cards (used by settings) */
+/* ------------------------------------------------------------------ */
+section.card {
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  padding: var(--pad-lg);
+  margin: var(--pad) 0;
+}
+section.card > h2:first-child { margin-top: 0; }
+
+/* ------------------------------------------------------------------ */
+/* flashes / errors */
+/* ------------------------------------------------------------------ */
+.flash, .error, .errors {
+  padding: 0.6em 0.8em;
+  border-radius: var(--radius);
+  margin: 0.6em 0;
+  border: 1px solid var(--rule);
+  background: var(--surface);
+}
+.error, .errors {
+  background: var(--warn-soft);
+  border-color: var(--warn);
+  color: var(--warn);
+}
+
+.invite-success {
+  background: var(--surface);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  padding: var(--pad-lg);
+  margin: var(--pad) 0;
+}
+
+/* ------------------------------------------------------------------ */
+/* install banner */
+/* ------------------------------------------------------------------ */
+.pwa-install {
+  position: fixed;
+  bottom: 0; left: 0; right: 0;
+  background: var(--surface);
+  border-top: 1px solid var(--rule);
+  padding: 0.6em 0.9em;
+  display: none;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.6em;
+  z-index: 100;
+}
+.pwa-install.show { display: flex; }
+.pwa-install button { margin: 0; padding: 0.4em 0.8em; min-height: 36px; }
+.pwa-install .dismiss {
+  background: transparent;
+  color: var(--ink-soft);
+  border: 1px solid var(--rule);
+}
+
+/* ------------------------------------------------------------------ */
+/* HTMX state */
+/* ------------------------------------------------------------------ */
+.htmx-request { opacity: 0.6; transition: opacity 0.12s; }

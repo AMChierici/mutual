@@ -129,7 +129,11 @@ and **recorded date** (when the row was written).
 Known gaps documented in [`docs/getting-started.md`](docs/getting-started.md):
 
 - No built-in email notifications — wire the outbound webhook to a bot
-- No PWA / mobile manifest yet — that's the next milestone
+
+Mutual is a Progressive Web App: install it on a phone home-screen from
+Android Chrome or iOS Safari and it runs in its own window with offline
+shell caching. See [`docs/getting-started.md`](docs/getting-started.md)
+for the install steps.
 
 For self-hosters running multiple pools on one box, see
 [`docs/platform-admin.md`](docs/platform-admin.md) for the operator

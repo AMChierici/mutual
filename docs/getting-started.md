@@ -184,6 +184,33 @@ A single login (one magic-link session) covers every pool you're a member
 of. The header on each pool's dashboard has a "Switch pool" link back to
 the picker.
 
+## Installing Mutual on a phone
+
+Mutual ships as a Progressive Web App, so members can install it from
+their phone's browser instead of using a separate native app store.
+
+**Android (Chrome / Samsung Internet):** open the pool dashboard. After
+a few seconds the address-bar shows an "Install" hint, and Mutual itself
+surfaces an "Install Mutual" banner at the bottom of the screen. Tap
+install — it appears on the home screen like any other app.
+
+**iOS (Safari):** Apple doesn't surface the install prompt itself. Tap
+the Share button → "Add to Home Screen". Once added, Mutual opens in
+its own window with no browser chrome.
+
+Once installed, Mutual works in **standalone mode** (no URL bar) and
+keeps the app shell cached for offline reads — if a member loses
+signal, opening the app still renders the dashboard layout and shows a
+clear "you're offline" screen for live reads. Writes (claims,
+contributions, votes) intentionally never go through the offline cache;
+the audit log requires those to hit the server live.
+
+For self-hosters who want HTMX (used for the setup wizard's HTMX-driven
+form rows) to work fully offline, drop a vendored copy of
+`htmx.min.js` into `api/web/static/vendor/` and edit `base.html` to
+load it from there instead of unpkg. The service worker will cache it
+on first request.
+
 ## Common bumps
 
 - **"It says I'm not authenticated and won't let me in."** Your cookie

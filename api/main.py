@@ -27,6 +27,7 @@ from api.routes_dashboard import router as dashboard_router
 from api.routes_login import router as login_router
 from api.routes_members import router as members_router
 from api.routes_platform_admin import router as platform_admin_router
+from api.routes_pwa import router as pwa_router
 from api.routes_settings import router as settings_router
 from api.routes_setup import router as setup_router
 
@@ -110,6 +111,7 @@ app.include_router(audit_router)
 app.include_router(settings_router)
 app.include_router(members_router)
 app.include_router(platform_admin_router)
+app.include_router(pwa_router)
 
 
 # ---------------------------------------------------------------------------
