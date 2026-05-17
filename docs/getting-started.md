@@ -146,16 +146,44 @@ This is what every-week feels like:
 
 ## Where to look in the app
 
+Each pool lives under `/pools/{slug}/...`, where `{slug}` is auto-generated
+from the pool's name during setup (and admin-editable later). The slug
+appears in URLs and audit-event payloads.
+
 | URL | What it is |
 | --- | --- |
-| `/` | Dashboard: balance, 12-month chart, pending claims, member list |
-| `/models` | Actuarial output: pricing + reserving rationales |
-| `/claims` | All claims |
-| `/claims/new` | Submit a claim |
-| `/claims/pending` | Claims awaiting *your* vote |
-| `/audit` | Read-only audit log |
-| `/settings` | Admin: webhook URL, manual "monthly close" trigger |
+| `/` | Account home — redirects to your pool list, or to your single pool if you only belong to one |
+| `/pools/` | Picker — list of every pool you're a member of |
+| `/pools/new` | Wizard to start a *second* pool under your existing account |
+| `/pools/{slug}/` | Pool dashboard: balance, 12-month chart, pending claims, member list |
+| `/pools/{slug}/models` | Actuarial output: pricing + reserving rationales |
+| `/pools/{slug}/claims` | All claims in this pool |
+| `/pools/{slug}/claims/new` | Submit a claim |
+| `/pools/{slug}/claims/pending` | Claims awaiting *your* vote |
+| `/pools/{slug}/audit` | Read-only audit log |
+| `/pools/{slug}/settings` | Admin: webhook URL, manual "monthly close" trigger |
 | `/login` | Paste a magic link (if you cleared cookies) |
+
+Old v0 bookmarks (`/claims`, `/audit`, `/settings`, etc.) still work for
+one release — they 303 to `/pools/{your-slug}/...` automatically.
+
+## Running more than one pool
+
+A single Mutual install can host any number of pools. Some reasons to do it:
+
+- Your family pool and a separate friend-group pool, kept on the same
+  server but with separate ledgers and members.
+- A "test" pool for trying out a new governance scheme without disturbing
+  the real one.
+
+To create a second pool: open `/pools/new`, run the same fields as the
+first-run wizard (name, currency, opening balance, governance tiers),
+submit. You become the only admin of the new pool; invite the rest from
+the future members page (M3, in progress).
+
+A single login (one magic-link session) covers every pool you're a member
+of. The header on each pool's dashboard has a "Switch pool" link back to
+the picker.
 
 ## Common bumps
 

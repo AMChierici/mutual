@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from api.auth import SESSION_COOKIE, SESSION_TTL, mint_token
 from api.deps import get_db
+from api.orm import Pool
 from api.policies import list_policy_templates, read_policy_template
 from api.setup import (
     GovernanceTier,
@@ -122,6 +123,10 @@ async def post_wizard(request: Request, db: Session = Depends(get_db)):
         # Race: someone else completed setup between our check and commit.
         raise HTTPException(status.HTTP_409_CONFLICT, "setup already completed")
 
+    pool = db.get(Pool, result.pool_id)
+    assert pool is not None  # we just inserted it
+    pool_slug = pool.slug
+
     templates = request.app.state.templates
     response: HTMLResponse = templates.TemplateResponse(
         request,
@@ -129,6 +134,7 @@ async def post_wizard(request: Request, db: Session = Depends(get_db)):
         {
             "login_url": result.admin_login_url,
             "pool_name": req.pool_name,
+            "pool_slug": pool_slug,
         },
     )
     response.set_cookie(

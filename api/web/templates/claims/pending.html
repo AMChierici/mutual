@@ -20,11 +20,11 @@
     <tbody>
         {% for c in claims %}
         <tr>
-            <td><a href="/claims/{{ c.id }}">#{{ c.id }} — {{ c.description[:80] }}{% if c.description|length > 80 %}…{% endif %}</a></td>
+            <td><a href="/pools/{{ pool.slug }}/claims/{{ c.id }}">#{{ c.id }} — {{ c.description[:80] }}{% if c.description|length > 80 %}…{% endif %}</a></td>
             <td>{{ "%.2f" | format(c.amount_requested / 100) }}</td>
             <td>{{ c.category }}</td>
             <td>
-                <form method="post" action="/claims/{{ c.id }}/vote" id="vote-{{ c.id }}">
+                <form method="post" action="/pools/{{ pool.slug }}/claims/{{ c.id }}/vote" id="vote-{{ c.id }}">
                     <input name="reason" placeholder="Optional reason">
             </td>
             <td>
@@ -38,5 +38,5 @@
 </table>
 {% endif %}
 
-<p><a href="/claims">All claims</a></p>
+<p><a href="/pools/{{ pool.slug }}/claims">All claims</a></p>
 {% endblock %}

@@ -1,17 +1,13 @@
-"""Dashboard HTTP routes — the post-login landing page (`/`) plus the
-actuarial-output tab (`/models`).
-
-Both routes redirect first-run installs to ``/setup``. Past first run, both
-require an active member's session cookie.
+"""Dashboard HTTP routes — pool overview (`/pools/{slug}/`) plus the
+actuarial-output tab (`/pools/{slug}/models`).
 """
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
-from fastapi.responses import HTMLResponse, RedirectResponse
-from sqlalchemy import select
+from fastapi import APIRouter, Depends, Request
+from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session
 
-from api.auth import SESSION_COOKIE, refresh_session, resolve_session
+from api.auth import current_membership_for_pool
 from api.dashboard import (
     DEFAULT_BUCKET_BY,
     member_contribution_status,
@@ -20,50 +16,21 @@ from api.dashboard import (
     pending_claims,
 )
 from api.dashboard_models import compute_pricing, compute_reserving
-from api.deps import get_db
-from api.orm import Member, Membership, MemberStatus, Pool
+from api.deps import get_db, get_pool_from_slug
+from api.orm import Member, Membership, Pool
 
-router = APIRouter(tags=["dashboard"])
-
-
-def _get_pool_or_redirect(db: Session) -> Pool | RedirectResponse:
-    pool = db.scalars(select(Pool)).first()
-    if pool is None:
-        return RedirectResponse("/setup", status_code=status.HTTP_303_SEE_OTHER)
-    return pool
-
-
-def _current_member_strict(request: Request, db: Session, pool: Pool) -> Membership:
-    """Like ``api.auth.current_member`` but used by routes that handle the
-    no-pool redirect themselves before authenticating."""
-    cookie = request.cookies.get(SESSION_COOKIE)
-    auth_session = resolve_session(db, cookie)
-    if auth_session is None:
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "not authenticated")
-    refresh_session(db, auth_session)
-    membership = db.scalars(
-        select(Membership)
-        .where(Membership.user_id == auth_session.user_id)
-        .where(Membership.pool_id == pool.id)
-    ).one_or_none()
-    if membership is None or membership.status != MemberStatus.active:
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "member not active")
-    return membership
+router = APIRouter(prefix="/pools/{pool_slug}", tags=["dashboard"])
 
 
 @router.get("/", response_class=HTMLResponse)
+@router.get("")
 def overview(
     request: Request,
     bucket: str = DEFAULT_BUCKET_BY,
+    pool: Pool = Depends(get_pool_from_slug),
     db: Session = Depends(get_db),
+    member: Membership = Depends(current_membership_for_pool),
 ):
-    pool_or_redirect = _get_pool_or_redirect(db)
-    if isinstance(pool_or_redirect, RedirectResponse):
-        return pool_or_redirect
-    pool = pool_or_redirect
-
-    member = _current_member_strict(request, db, pool)
-
     bucket_by = bucket if bucket in ("period", "recorded_at") else DEFAULT_BUCKET_BY
     summary = overview_summary(db, pool.id)
     buckets = monthly_buckets(db, pool.id, bucket_by=bucket_by)
@@ -83,6 +50,7 @@ def overview(
         request,
         "dashboard/overview.html",
         {
+            "pool": pool,
             "active_tab": "overview",
             "is_admin": member.role.value == "admin",
             "summary": summary,
@@ -96,18 +64,15 @@ def overview(
 
 
 @router.get("/models", response_class=HTMLResponse)
-def models_tab(request: Request, db: Session = Depends(get_db)):
-    pool_or_redirect = _get_pool_or_redirect(db)
-    if isinstance(pool_or_redirect, RedirectResponse):
-        return pool_or_redirect
-    pool = pool_or_redirect
-
-    member = _current_member_strict(request, db, pool)
-
+def models_tab(
+    request: Request,
+    pool: Pool = Depends(get_pool_from_slug),
+    db: Session = Depends(get_db),
+    member: Membership = Depends(current_membership_for_pool),
+):
     pricing = compute_pricing(db, pool.id)
     reserving = compute_reserving(db, pool.id, simulations=1000, seed=0)
 
-    # Map premium ids back to member display names for friendlier output.
     members_by_id = {
         str(m.id): m
         for m in db.query(Member).filter(Member.pool_id == pool.id).all()
@@ -119,6 +84,7 @@ def models_tab(request: Request, db: Session = Depends(get_db)):
         request,
         "dashboard/models.html",
         {
+            "pool": pool,
             "active_tab": "models",
             "is_admin": member.role.value == "admin",
             "summary": summary,

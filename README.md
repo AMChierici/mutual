@@ -77,7 +77,8 @@ design.
 
 ## Architecture (one paragraph)
 
-Local-first single-pool-per-install web app. FastAPI for routes; SQLAlchemy 2
+Local-first multi-pool web app — one install can host any number of pools,
+and a user can belong to several at once. FastAPI for routes; SQLAlchemy 2
 ORM over SQLite (Alembic migrations); Jinja templates with HTMX for
 interactive bits; no JavaScript framework. Every state change writes one
 `AuditEvent` row, and the same change can fire one outbound webhook (POST
@@ -112,7 +113,7 @@ alembic/     migrations
 | --- | --- |
 | 1 | Database layer (SQLAlchemy ORM + Alembic) |
 | 2 | Magic-link auth, server-side sessions |
-| 3 | Setup wizard (one pool per install) |
+| 3 | Setup wizard (first-run) + create-additional-pool flow under `/pools/new` |
 | 4 | Contributions (single + weekly bulk close) |
 | 5 | Claims (with photo evidence) |
 | 6 | Voting + tier-routed governance |
@@ -129,17 +130,18 @@ Known gaps documented in [`docs/getting-started.md`](docs/getting-started.md):
 
 - No member-management UI yet — invite via shell snippet
 - No built-in email notifications — wire the outbound webhook to a bot
-- One pool per install today; multi-pool is in progress (see below)
+- No platform-admin view yet (the cross-pool operator dashboard)
 
-**Upgrading from a v0 (pre-multi-account) install:** the next migration
-(`alembic upgrade head`) is M1 of the multi-account expansion. It adds a
-`users` table, renames `members` → `memberships`, gives each pool a slug,
-and rewires auth tokens to bind to a user instead of a single membership.
-Existing data is auto-migrated: the one existing pool gets a slug derived
-from its name, and members without an email get a placeholder
-`user+<id>@local.invalid` so the new `users.email UNIQUE NOT NULL`
-constraint holds. UI is unchanged in M1; multi-pool URLs and admin
-screens land in the following milestones.
+**Upgrading from a v0 (pre-multi-account) install:** running
+`alembic upgrade head` migrates an existing single-pool install into the
+new multi-pool shape. Adds a `users` table, renames `members` →
+`memberships`, gives each pool a slug, rewires auth tokens to bind to a
+user instead of a single membership, and rewrites all pool-scoped URLs to
+live under `/pools/{slug}/...`. Existing data is auto-migrated: the
+existing pool gets a slug derived from its name, members without an email
+get a placeholder `user+<id>@local.invalid`, and old bookmarks
+(`/claims`, `/audit`, etc.) 303 to `/pools/{your-slug}/...` for one
+release before the redirect is removed.
 
 We're running it on real family pools to find the sharp edges. **Don't
 trust it with money you can't afford to lose track of yet.**

@@ -27,8 +27,8 @@ from fastapi import Depends, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from api.deps import get_db
-from api.orm import AuthSession, LoginToken, Membership, MemberStatus, User
+from api.deps import get_db, get_pool_from_slug
+from api.orm import AuthSession, LoginToken, Membership, MemberStatus, Pool, User
 
 LOGIN_TOKEN_TTL = timedelta(hours=24)
 SESSION_TTL = timedelta(days=30)
@@ -194,6 +194,36 @@ def require_admin(member: Membership = Depends(current_member)) -> Membership:
     if member.role.value != "admin":
         raise HTTPException(status.HTTP_403_FORBIDDEN, "admin required")
     return member
+
+
+def current_membership_for_pool(
+    pool: Pool = Depends(get_pool_from_slug),
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+) -> Membership:
+    """Pool-scoped membership for a URL like ``/pools/{slug}/...``.
+
+    404s if the pool doesn't exist (handled by :func:`get_pool_from_slug`).
+    404s — not 403 — if the current user has no membership in this pool;
+    leaking "pool exists but you're not in it" is a small information
+    disclosure we don't need to give in v1.
+    """
+    membership = db.scalars(
+        select(Membership)
+        .where(Membership.user_id == user.id)
+        .where(Membership.pool_id == pool.id)
+    ).one_or_none()
+    if membership is None or membership.status != MemberStatus.active:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "pool not found")
+    return membership
+
+
+def require_pool_admin(
+    membership: Membership = Depends(current_membership_for_pool),
+) -> Membership:
+    if membership.role.value != "admin":
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "admin required")
+    return membership
 
 
 def optional_current_member(

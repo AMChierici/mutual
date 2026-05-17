@@ -1,34 +1,27 @@
-"""Read-only audit-log viewer."""
+"""Read-only audit-log viewer (pool-scoped)."""
 from __future__ import annotations
 
 import json
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
-from fastapi.responses import HTMLResponse, RedirectResponse
-from sqlalchemy import select
+from fastapi import APIRouter, Depends, Request
+from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session
 
 from api.audit import DEFAULT_LIMIT, list_audit_events
-from api.auth import current_member
-from api.deps import get_db
-from api.orm import Member, Pool
+from api.auth import current_membership_for_pool
+from api.deps import get_db, get_pool_from_slug
+from api.orm import Member, Membership, Pool
 
-router = APIRouter(tags=["audit"])
+router = APIRouter(prefix="/pools/{pool_slug}", tags=["audit"])
 
 
 @router.get("/audit", response_class=HTMLResponse)
 def audit_view(
     request: Request,
+    pool: Pool = Depends(get_pool_from_slug),
     db: Session = Depends(get_db),
-    member: Member = Depends(current_member),
+    member: Membership = Depends(current_membership_for_pool),
 ):
-    pool = db.scalars(select(Pool)).first()
-    if pool is None:
-        return RedirectResponse("/setup", status_code=status.HTTP_303_SEE_OTHER)
-
-    if member.pool_id != pool.id:
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "not in this pool")
-
     events = list_audit_events(db, pool.id)
     members_by_id = {m.id: m for m in db.query(Member).filter_by(pool_id=pool.id).all()}
 
@@ -51,6 +44,7 @@ def audit_view(
         request,
         "audit/list.html",
         {
+            "pool": pool,
             "events": rendered,
             "limit": DEFAULT_LIMIT,
             "showing": len(rendered),

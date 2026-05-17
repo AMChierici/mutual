@@ -1,4 +1,4 @@
-"""HTTP routes for recording contributions.
+"""HTTP routes for recording contributions (pool-scoped).
 
 In v0 the pool admin is the treasurer (the architecture role enum doesn't
 include 'treasurer'); both endpoints are admin-only.
@@ -10,19 +10,18 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel, Field
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from api.auth import require_admin
+from api.auth import require_pool_admin
 from api.contributions import (
     BulkContributionRow,
     record_bulk,
     record_contribution,
 )
-from api.deps import get_db
-from api.orm import Contribution, Member, MemberStatus, Pool
+from api.deps import get_db, get_pool_from_slug
+from api.orm import Contribution, Member, Membership, MemberStatus, Pool
 
-router = APIRouter(prefix="/contributions", tags=["contributions"])
+router = APIRouter(prefix="/pools/{pool_slug}/contributions", tags=["contributions"])
 
 
 class ContributionCreate(BaseModel):
@@ -48,20 +47,13 @@ def _dollars_to_cents(raw: str | None) -> int:
         return 0
 
 
-def _the_pool(db: Session) -> Pool:
-    pool = db.scalars(select(Pool)).first()
-    if pool is None:
-        raise HTTPException(status.HTTP_409_CONFLICT, "pool not initialized")
-    return pool
-
-
 @router.post("", status_code=status.HTTP_201_CREATED)
 def post_contribution(
     payload: ContributionCreate,
+    pool: Pool = Depends(get_pool_from_slug),
     db: Session = Depends(get_db),
-    admin: Member = Depends(require_admin),
+    admin: Membership = Depends(require_pool_admin),
 ) -> JSONResponse:
-    pool = _the_pool(db)
     try:
         c = record_contribution(
             db,
@@ -88,10 +80,10 @@ def post_contribution(
 def get_bulk(
     request: Request,
     period: str | None = None,
+    pool: Pool = Depends(get_pool_from_slug),
     db: Session = Depends(get_db),
-    admin: Member = Depends(require_admin),
+    admin: Membership = Depends(require_pool_admin),
 ) -> HTMLResponse:
-    pool = _the_pool(db)
     period = period or _current_period()
 
     members = (
@@ -115,6 +107,7 @@ def get_bulk(
         request,
         "contributions/bulk.html",
         {
+            "pool": pool,
             "period": period,
             "members": members,
             "existing_by_member": existing_by_member,
@@ -126,10 +119,10 @@ def get_bulk(
 @router.post("/bulk", response_class=HTMLResponse)
 async def post_bulk(
     request: Request,
+    pool: Pool = Depends(get_pool_from_slug),
     db: Session = Depends(get_db),
-    admin: Member = Depends(require_admin),
+    admin: Membership = Depends(require_pool_admin),
 ) -> HTMLResponse:
-    pool = _the_pool(db)
     form = await request.form()
     period = (form.get("period") or "").strip()
 
@@ -162,6 +155,7 @@ async def post_bulk(
         request,
         "contributions/bulk_done.html",
         {
+            "pool": pool,
             "period": period,
             "created_count": len(summary.created_contribution_ids),
             "skipped_count": len(summary.skipped_member_ids),

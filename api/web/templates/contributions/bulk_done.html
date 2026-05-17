@@ -6,5 +6,5 @@
 {% if skipped_count %}
 <p>{{ skipped_count }} skipped (zero amount, already recorded, or unknown member).</p>
 {% endif %}
-<p><a href="/contributions/bulk">Back to bulk entry</a> · <a href="/">Dashboard</a></p>
+<p><a href="/pools/{{ pool.slug }}/contributions/bulk">Back to bulk entry</a> · <a href="/pools/{{ pool.slug }}/">Dashboard</a></p>
 {% endblock %}

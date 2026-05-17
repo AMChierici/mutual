@@ -5,7 +5,7 @@
     <h1>Audit log</h1>
     <p>Showing the latest {{ showing }} events (cap: {{ limit }}). Newest first.
        This log is append-only — no edits, no deletes, ever.</p>
-    <p><a href="/">← Dashboard</a></p>
+    <p><a href="/pools/{{ pool.slug }}/">← Dashboard</a></p>
 </header>
 
 {% if not events %}

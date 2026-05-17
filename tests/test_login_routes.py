@@ -99,11 +99,11 @@ async def test_post_login_with_non_login_url_rejected(client, pool):
 
 
 # ---------------------------------------------------------------------------
-# 401 redirect for HTML-accepting unauthenticated visitors
+# 401 redirect for HTML-accepting unauthenticated visitors on pool-scoped paths
 # ---------------------------------------------------------------------------
-async def test_dashboard_unauth_html_redirects_to_login(client, pool):
+async def test_pool_dashboard_unauth_html_redirects_to_login(client, pool):
     r = await client.get(
-        "/",
+        f"/pools/{pool.slug}/",
         headers={"accept": "text/html,application/xhtml+xml"},
         follow_redirects=False,
     )
@@ -111,16 +111,18 @@ async def test_dashboard_unauth_html_redirects_to_login(client, pool):
     assert r.headers["location"] == "/login"
 
 
-async def test_dashboard_unauth_non_html_still_returns_json_401(client, pool):
+async def test_pool_dashboard_unauth_non_html_still_returns_json_401(client, pool):
     """API clients (Accept: */* or JSON) keep getting JSON 401 — the
     existing API contract from steps 2-9 is unchanged."""
-    r = await client.get("/", headers={"accept": "*/*"}, follow_redirects=False)
+    r = await client.get(
+        f"/pools/{pool.slug}/", headers={"accept": "*/*"}, follow_redirects=False
+    )
     assert r.status_code == 401
 
 
 async def test_audit_unauth_html_redirects_to_login(client, pool):
     r = await client.get(
-        "/audit",
+        f"/pools/{pool.slug}/audit",
         headers={"accept": "text/html"},
         follow_redirects=False,
     )
@@ -130,7 +132,7 @@ async def test_audit_unauth_html_redirects_to_login(client, pool):
 
 async def test_claims_pending_unauth_html_redirects_to_login(client, pool):
     r = await client.get(
-        "/claims/pending",
+        f"/pools/{pool.slug}/claims/pending",
         headers={"accept": "text/html"},
         follow_redirects=False,
     )

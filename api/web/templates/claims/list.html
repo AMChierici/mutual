@@ -2,7 +2,7 @@
 {% block title %}Claims — Mutual{% endblock %}
 {% block content %}
 <h1>Claims</h1>
-<p><a href="/claims/new">+ Submit a claim</a></p>
+<p><a href="/pools/{{ pool.slug }}/claims/new">+ Submit a claim</a> · <a href="/pools/{{ pool.slug }}/">← {{ pool.name }}</a></p>
 
 {% if not claims %}
 <p>No claims yet.</p>
@@ -24,7 +24,7 @@
             <td>{{ members_by_id[c.member_id].display_name }}</td>
             <td>{{ "%.2f" | format(c.amount_requested / 100) }}</td>
             <td>{{ c.category }}</td>
-            <td><a href="/claims/{{ c.id }}"><code>{{ c.status.value }}</code></a></td>
+            <td><a href="/pools/{{ pool.slug }}/claims/{{ c.id }}"><code>{{ c.status.value }}</code></a></td>
         </tr>
         {% endfor %}
     </tbody>

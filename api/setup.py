@@ -116,6 +116,112 @@ def is_first_run(db: Session) -> bool:
     return db.scalars(select(Pool).limit(1)).first() is None
 
 
+class AdditionalPoolRequest(BaseModel):
+    """Inputs for creating a second-or-later pool under an existing user."""
+
+    pool_name: str = Field(min_length=1)
+    currency: str = Field(min_length=3, max_length=3)
+    starting_balance_cents: int = Field(default=0, ge=0)
+    policy_template_id: str | None = None
+    policy_text: str = ""
+    governance_tiers: list[GovernanceTier] = Field(min_length=1)
+
+    @field_validator("currency")
+    @classmethod
+    def _upper(cls, v: str) -> str:
+        return v.upper()
+
+
+class AdditionalPoolResult(BaseModel):
+    pool_id: int
+    pool_slug: str
+    admin_member_id: int
+
+
+def create_additional_pool(
+    db: Session, user: User, req: AdditionalPoolRequest
+) -> AdditionalPoolResult:
+    """Create a new pool under an existing :class:`User`.
+
+    The user becomes the sole admin of the new pool. Reuses the same
+    audit-event taxonomy as ``complete_setup`` so platform-admin views
+    don't need to special-case how a pool was born.
+    """
+    now = datetime.now(timezone.utc)
+    pool = Pool(
+        slug=_unique_slug(db, slugify(req.pool_name)),
+        name=req.pool_name,
+        currency=req.currency,
+        policy_template_id=req.policy_template_id,
+        policy_text=req.policy_text,
+        governance_config={"tiers": [t.model_dump() for t in req.governance_tiers]},
+        created_at=now,
+    )
+    db.add(pool)
+    db.flush()
+
+    admin = Membership(
+        user_id=user.id,
+        pool_id=pool.id,
+        display_name=user.display_name,
+        role=MemberRole.admin,
+        status=MemberStatus.active,
+        joined_at=now,
+    )
+    db.add(admin)
+    db.flush()
+
+    if req.starting_balance_cents > 0:
+        db.add(
+            LedgerEntry(
+                pool_id=pool.id,
+                kind=LedgerKind.opening_balance,
+                ref_id=pool.id,
+                delta=req.starting_balance_cents,
+                balance_after=req.starting_balance_cents,
+                recorded_at=now,
+            )
+        )
+
+    db.add(
+        AuditEvent(
+            pool_id=pool.id,
+            actor_member_id=admin.id,
+            kind="pool.created",
+            payload_json={"name": pool.name, "currency": pool.currency, "slug": pool.slug},
+            recorded_at=now,
+        )
+    )
+    db.add(
+        AuditEvent(
+            pool_id=pool.id,
+            actor_member_id=admin.id,
+            kind="member.added",
+            payload_json={
+                "member_id": admin.id,
+                "display_name": admin.display_name,
+                "role": "admin",
+            },
+            recorded_at=now,
+        )
+    )
+    if req.starting_balance_cents > 0:
+        db.add(
+            AuditEvent(
+                pool_id=pool.id,
+                actor_member_id=admin.id,
+                kind="ledger.opening_balance",
+                payload_json={"amount_cents": req.starting_balance_cents},
+                recorded_at=now,
+            )
+        )
+
+    db.commit()
+    return AdditionalPoolResult(
+        pool_id=pool.id, pool_slug=pool.slug, admin_member_id=admin.id
+    )
+
+
 def _get_or_create_user(
     db: Session, *, email: str | None, display_name: str, member_seq: int, now: datetime
 ) -> User:
