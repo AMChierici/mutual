@@ -2,14 +2,63 @@
 <html lang="en">
 <head>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="theme-color" content="#1aa260">
     <title>{% block title %}Mutual{% endblock %}</title>
-    <script src="https://unpkg.com/htmx.org@1.9.12" defer></script>
+    <link rel="manifest" href="/manifest.webmanifest">
+    <link rel="icon" type="image/png" sizes="192x192" href="/static/icons/icon-192.png">
+    <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
     <link rel="stylesheet" href="/static/app.css">
+    <script src="https://unpkg.com/htmx.org@1.9.12" defer></script>
 </head>
 <body>
     <main>
         {% block content %}{% endblock %}
     </main>
+
+    <div class="pwa-install" id="pwa-install" aria-live="polite">
+        <span>Install Mutual on this device for offline-friendly access.</span>
+        <button id="pwa-install-go" type="button">Install</button>
+        <button class="dismiss" id="pwa-install-dismiss" type="button">Not now</button>
+    </div>
+
+    <script>
+        // Service-worker registration. The SW caches the app shell so the
+        // CSS / icons / manifest are available offline. POSTs are never
+        // intercepted (audit-log integrity requires live writes).
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/service-worker.js')
+                    .catch(err => console.warn('SW registration failed:', err));
+            });
+        }
+
+        // Install banner — dismissible per session.
+        (function () {
+            const banner = document.getElementById('pwa-install');
+            const go = document.getElementById('pwa-install-go');
+            const dismiss = document.getElementById('pwa-install-dismiss');
+            let deferred = null;
+
+            if (sessionStorage.getItem('mutual_install_dismissed') === '1') return;
+
+            window.addEventListener('beforeinstallprompt', (e) => {
+                e.preventDefault();
+                deferred = e;
+                banner.classList.add('show');
+            });
+            go.addEventListener('click', async () => {
+                if (!deferred) return;
+                banner.classList.remove('show');
+                deferred.prompt();
+                await deferred.userChoice;
+                deferred = null;
+            });
+            dismiss.addEventListener('click', () => {
+                banner.classList.remove('show');
+                sessionStorage.setItem('mutual_install_dismissed', '1');
+            });
+        })();
+    </script>
 </body>
 </html>

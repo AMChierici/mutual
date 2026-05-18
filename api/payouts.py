@@ -64,6 +64,7 @@ def record_payout(
     paid_at = paid_at or now
 
     payout = Payout(
+        pool_id=claim.pool_id,
         claim_id=claim_id,
         amount_paid=amount_paid_cents,
         paid_at=paid_at,

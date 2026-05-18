@@ -7,13 +7,13 @@
     {% if bucket_by == "period" %}
         <strong>By period</strong>
     {% else %}
-        <a href="/?bucket=period">By period</a>
+        <a href="/pools/{{ pool.slug }}/?bucket=period">By period</a>
     {% endif %}
     ·
     {% if bucket_by == "recorded_at" %}
         <strong>By recorded date</strong>
     {% else %}
-        <a href="/?bucket=recorded_at">By recorded date</a>
+        <a href="/pools/{{ pool.slug }}/?bucket=recorded_at">By recorded date</a>
     {% endif %}
     <br>
     <small>
@@ -55,7 +55,7 @@
 <ul>
     {% for c in pending %}
     <li>
-        <a href="/claims/{{ c.id }}">#{{ c.id }} — {{ c.category }} ·
+        <a href="/pools/{{ pool.slug }}/claims/{{ c.id }}">#{{ c.id }} — {{ c.category }} ·
         {{ "%.2f" | format(c.amount_requested / 100) }} {{ summary.currency }}</a>
         — {{ c.description[:80] }}{% if c.description|length > 80 %}…{% endif %}
     </li>

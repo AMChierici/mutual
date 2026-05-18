@@ -23,46 +23,46 @@ def sink(monkeypatch):
 
 @pytest_asyncio.fixture
 async def member_client(client, session, members) -> AsyncClient:
-    tok = create_login_token(session, members[0].id)
+    tok = create_login_token(session, members[0].user_id)
     auth_session = consume_login_token(session, tok.token)
     client.cookies.set(SESSION_COOKIE, auth_session.token)
     return client
 
 
 # ---------------------------------------------------------------------------
-# GET /settings
+# GET /pools/{slug}/settings
 # ---------------------------------------------------------------------------
 async def test_get_settings_unauthenticated_is_401(client, pool):
-    r = await client.get("/settings")
+    r = await client.get(f"/pools/{pool.slug}/settings")
     assert r.status_code == 401
 
 
-async def test_get_settings_non_admin_is_403(member_client):
-    r = await member_client.get("/settings")
+async def test_get_settings_non_admin_is_403(member_client, pool):
+    r = await member_client.get(f"/pools/{pool.slug}/settings")
     assert r.status_code == 403
 
 
 async def test_get_settings_admin_renders_form(admin_client, pool):
-    r = await admin_client.get("/settings")
+    r = await admin_client.get(f"/pools/{pool.slug}/settings")
     assert r.status_code == 200
     assert 'name="webhook_url"' in r.text
-    assert "/settings/webhook" in r.text
+    assert f"/pools/{pool.slug}/settings/webhook" in r.text
 
 
 async def test_get_settings_shows_existing_url(admin_client, session, pool):
     from api.webhooks import set_webhook_url
     set_webhook_url(session, pool.id, "https://example.com/hook")
-    r = await admin_client.get("/settings")
+    r = await admin_client.get(f"/pools/{pool.slug}/settings")
     assert r.status_code == 200
     assert "https://example.com/hook" in r.text
 
 
 # ---------------------------------------------------------------------------
-# POST /settings/webhook
+# POST /pools/{slug}/settings/webhook
 # ---------------------------------------------------------------------------
 async def test_post_webhook_admin_persists_url(admin_client, session, pool):
     r = await admin_client.post(
-        "/settings/webhook",
+        f"/pools/{pool.slug}/settings/webhook",
         data={"webhook_url": "https://example.com/hook"},
         follow_redirects=False,
     )
@@ -76,7 +76,7 @@ async def test_post_webhook_admin_can_clear_url(admin_client, session, pool):
     from api.webhooks import set_webhook_url
     set_webhook_url(session, pool.id, "https://example.com/hook")
     r = await admin_client.post(
-        "/settings/webhook",
+        f"/pools/{pool.slug}/settings/webhook",
         data={"webhook_url": ""},
         follow_redirects=False,
     )
@@ -86,31 +86,33 @@ async def test_post_webhook_admin_can_clear_url(admin_client, session, pool):
     assert get_webhook_url(session, pool.id) is None
 
 
-async def test_post_webhook_rejects_non_http_url(admin_client):
+async def test_post_webhook_rejects_non_http_url(admin_client, pool):
     r = await admin_client.post(
-        "/settings/webhook",
+        f"/pools/{pool.slug}/settings/webhook",
         data={"webhook_url": "javascript:alert(1)"},
     )
     assert r.status_code == 400
 
 
-async def test_post_webhook_non_admin_is_403(member_client):
+async def test_post_webhook_non_admin_is_403(member_client, pool):
     r = await member_client.post(
-        "/settings/webhook",
+        f"/pools/{pool.slug}/settings/webhook",
         data={"webhook_url": "https://example.com/hook"},
     )
     assert r.status_code == 403
 
 
 # ---------------------------------------------------------------------------
-# POST /webhooks/monthly-close
+# POST /pools/{slug}/webhooks/monthly-close
 # ---------------------------------------------------------------------------
 async def test_monthly_close_admin_fires_event(
     admin_client, session, pool, sink
 ):
     from api.webhooks import set_webhook_url
     set_webhook_url(session, pool.id, "https://example.com/hook")
-    r = await admin_client.post("/webhooks/monthly-close", follow_redirects=False)
+    r = await admin_client.post(
+        f"/pools/{pool.slug}/webhooks/monthly-close", follow_redirects=False
+    )
     assert r.status_code in (200, 303)
     assert len(sink) == 1
     import json as _json
@@ -119,18 +121,87 @@ async def test_monthly_close_admin_fires_event(
     assert body["payload"]["period"]  # YYYY-MM
 
 
-async def test_monthly_close_non_admin_is_403(member_client):
-    r = await member_client.post("/webhooks/monthly-close")
+async def test_monthly_close_non_admin_is_403(member_client, pool):
+    r = await member_client.post(f"/pools/{pool.slug}/webhooks/monthly-close")
     assert r.status_code == 403
 
 
 async def test_monthly_close_unauthenticated_is_401(client, pool):
-    r = await client.post("/webhooks/monthly-close")
+    r = await client.post(f"/pools/{pool.slug}/webhooks/monthly-close")
     assert r.status_code == 401
 
 
-async def test_monthly_close_no_url_configured_is_noop(admin_client, sink):
+async def test_monthly_close_no_url_configured_is_noop(admin_client, pool, sink):
     """No webhook configured → no call, no error."""
-    r = await admin_client.post("/webhooks/monthly-close", follow_redirects=False)
+    r = await admin_client.post(
+        f"/pools/{pool.slug}/webhooks/monthly-close", follow_redirects=False
+    )
     assert r.status_code in (200, 303)
     assert sink == []
+
+
+# ---------------------------------------------------------------------------
+# POST /pools/{slug}/settings/identity — pool rename + slug change (M3)
+# ---------------------------------------------------------------------------
+async def test_post_identity_updates_name_and_slug(admin_client, session, pool):
+    old_slug = pool.slug
+    r = await admin_client.post(
+        f"/pools/{old_slug}/settings/identity",
+        data={"pool_name": "Renamed Pool", "slug": "renamed-pool"},
+        follow_redirects=False,
+    )
+    assert r.status_code == 303
+    assert r.headers["location"].startswith("/pools/renamed-pool/settings")
+
+    session.expire_all()
+    fresh = session.get(type(pool), pool.id)
+    assert fresh.name == "Renamed Pool"
+    assert fresh.slug == "renamed-pool"
+
+    # Audit recorded the rename.
+    from api.orm import AuditEvent
+    audit = (
+        session.query(AuditEvent)
+        .filter_by(kind="pool.renamed")
+        .order_by(AuditEvent.id.desc())
+        .first()
+    )
+    assert audit.payload_json["new_slug"] == "renamed-pool"
+
+
+async def test_post_identity_slug_collision_is_400(admin_client, session, pool):
+    """Another pool already has the slug we're trying to take."""
+    from api.orm import Pool
+    other = Pool(
+        slug="other-existing",
+        name="Other",
+        currency="USD",
+        governance_config={},
+    )
+    session.add(other)
+    session.commit()
+
+    r = await admin_client.post(
+        f"/pools/{pool.slug}/settings/identity",
+        data={"pool_name": pool.name, "slug": "other-existing"},
+    )
+    assert r.status_code == 400
+    session.expire_all()
+    fresh = session.get(type(pool), pool.id)
+    assert fresh.slug != "other-existing"
+
+
+async def test_post_identity_requires_name(admin_client, pool):
+    r = await admin_client.post(
+        f"/pools/{pool.slug}/settings/identity",
+        data={"pool_name": "", "slug": pool.slug},
+    )
+    assert r.status_code == 400
+
+
+async def test_post_identity_non_admin_is_403(member_client, pool):
+    r = await member_client.post(
+        f"/pools/{pool.slug}/settings/identity",
+        data={"pool_name": "X", "slug": "x"},
+    )
+    assert r.status_code == 403

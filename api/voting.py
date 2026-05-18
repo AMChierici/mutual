@@ -110,6 +110,7 @@ def cast_vote(
     now = now or datetime.now(timezone.utc)
 
     vote = Vote(
+        pool_id=claim.pool_id,
         claim_id=claim_id,
         member_id=member_id,
         decision=decision,

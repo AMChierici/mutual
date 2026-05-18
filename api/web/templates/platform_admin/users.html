@@ -1,0 +1,30 @@
+{% extends "platform_admin/_layout.html" %}
+{% block admin_content %}
+<h2>All users</h2>
+{% if not rows %}
+<p>No users yet.</p>
+{% else %}
+<table>
+    <thead>
+        <tr>
+            <th>Display name</th>
+            <th>Email</th>
+            <th>Memberships</th>
+            <th>Platform admin</th>
+            <th>Created</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for row in rows %}
+        <tr>
+            <td><a href="/admin/users/{{ row.user.id }}">{{ row.user.display_name }}</a></td>
+            <td>{{ row.email }}</td>
+            <td>{{ row.membership_count }}</td>
+            <td>{{ "yes" if row.user.is_platform_admin else "no" }}</td>
+            <td>{{ row.user.created_at.strftime("%Y-%m-%d") }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endif %}
+{% endblock %}

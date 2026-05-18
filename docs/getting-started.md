@@ -95,29 +95,28 @@ device or after clearing cookies.
 
 ## Inviting the rest of your family
 
-There's no member-management UI in v0 yet (it's the next thing on the roadmap).
-For now, mint each member's magic link from the shell:
+Open <code>/pools/{your-slug}/members</code> as a pool admin. From there:
 
-```bash
-docker compose exec mutual python -c "
-from api.db import make_engine, make_session_factory
-from api.auth import create_login_token
-from api.orm import Member
+- **Invite a member** (`+ Invite a member` button) — give a display name,
+  an email address (the global account identity; one person, one email
+  across all the pools they're in), and a role. Mutual creates the
+  membership in `invited` status and mints a single-use, 24-hour magic
+  link. Copy the link out of the success page and send it through
+  whatever channel you use (Signal, WhatsApp, SMS, email-via-bot). When
+  the recipient opens the link, their membership flips to `active` and
+  they're signed in for 30 days.
+- **Change someone's role** — pick `admin`, `member`, or `observer`
+  from the dropdown and save. The pool can't drop below one active
+  admin, so the last admin can't demote themselves.
+- **Deactivate someone** — set their status to `inactive`. Same
+  last-admin guard applies. Inactive members keep their history (claims,
+  votes, contributions) intact, just can't log in.
+- **Re-issue a magic link** — for someone who lost theirs. The button
+  on the row mints a fresh 24-hour link and surfaces it.
 
-engine = make_engine()
-SessionLocal = make_session_factory(engine)
-with SessionLocal() as s:
-    print('Members:')
-    for m in s.query(Member).all():
-        print(f'  {m.id}: {m.display_name} ({m.role.value}, {m.status.value})')
-    member_id = int(input('Mint a link for which member id? '))
-    tok = create_login_token(s, member_id)
-    print(f'URL: http://localhost:8000/auth/login/{tok.token}')
-"
-```
-
-Copy each URL into Signal/SMS/email/whatever channel you use. Each person
-clicks it once, lands on the dashboard, and stays logged in for 30 days.
+If you're inviting someone who already has a Mutual account on another
+pool on this install, Mutual recognises the email and attaches the new
+membership to their existing account — they don't need a second login.
 
 ## Weekly rhythm
 
@@ -146,16 +145,71 @@ This is what every-week feels like:
 
 ## Where to look in the app
 
+Each pool lives under `/pools/{slug}/...`, where `{slug}` is auto-generated
+from the pool's name during setup (and admin-editable later). The slug
+appears in URLs and audit-event payloads.
+
 | URL | What it is |
 | --- | --- |
-| `/` | Dashboard: balance, 12-month chart, pending claims, member list |
-| `/models` | Actuarial output: pricing + reserving rationales |
-| `/claims` | All claims |
-| `/claims/new` | Submit a claim |
-| `/claims/pending` | Claims awaiting *your* vote |
-| `/audit` | Read-only audit log |
-| `/settings` | Admin: webhook URL, manual "monthly close" trigger |
+| `/` | Account home — redirects to your pool list, or to your single pool if you only belong to one |
+| `/pools/` | Picker — list of every pool you're a member of |
+| `/pools/new` | Wizard to start a *second* pool under your existing account |
+| `/pools/{slug}/` | Pool dashboard: balance, 12-month chart, pending claims, member list |
+| `/pools/{slug}/models` | Actuarial output: pricing + reserving rationales |
+| `/pools/{slug}/claims` | All claims in this pool |
+| `/pools/{slug}/claims/new` | Submit a claim |
+| `/pools/{slug}/claims/pending` | Claims awaiting *your* vote |
+| `/pools/{slug}/audit` | Read-only audit log |
+| `/pools/{slug}/settings` | Admin: webhook URL, manual "monthly close" trigger |
 | `/login` | Paste a magic link (if you cleared cookies) |
+
+Old v0 bookmarks (`/claims`, `/audit`, `/settings`, etc.) still work for
+one release — they 303 to `/pools/{your-slug}/...` automatically.
+
+## Running more than one pool
+
+A single Mutual install can host any number of pools. Some reasons to do it:
+
+- Your family pool and a separate friend-group pool, kept on the same
+  server but with separate ledgers and members.
+- A "test" pool for trying out a new governance scheme without disturbing
+  the real one.
+
+To create a second pool: open `/pools/new`, run the same fields as the
+first-run wizard (name, currency, opening balance, governance tiers),
+submit. You become the only admin of the new pool; invite the rest from
+the future members page (M3, in progress).
+
+A single login (one magic-link session) covers every pool you're a member
+of. The header on each pool's dashboard has a "Switch pool" link back to
+the picker.
+
+## Installing Mutual on a phone
+
+Mutual ships as a Progressive Web App, so members can install it from
+their phone's browser instead of using a separate native app store.
+
+**Android (Chrome / Samsung Internet):** open the pool dashboard. After
+a few seconds the address-bar shows an "Install" hint, and Mutual itself
+surfaces an "Install Mutual" banner at the bottom of the screen. Tap
+install — it appears on the home screen like any other app.
+
+**iOS (Safari):** Apple doesn't surface the install prompt itself. Tap
+the Share button → "Add to Home Screen". Once added, Mutual opens in
+its own window with no browser chrome.
+
+Once installed, Mutual works in **standalone mode** (no URL bar) and
+keeps the app shell cached for offline reads — if a member loses
+signal, opening the app still renders the dashboard layout and shows a
+clear "you're offline" screen for live reads. Writes (claims,
+contributions, votes) intentionally never go through the offline cache;
+the audit log requires those to hit the server live.
+
+For self-hosters who want HTMX (used for the setup wizard's HTMX-driven
+form rows) to work fully offline, drop a vendored copy of
+`htmx.min.js` into `api/web/static/vendor/` and edit `base.html` to
+load it from there instead of unpkg. The service worker will cache it
+on first request.
 
 ## Common bumps
 

@@ -42,20 +42,20 @@ def approved_claim(session, funded_pool, admin):
 
 @pytest_asyncio.fixture
 async def member_client(client, session, members) -> AsyncClient:
-    tok = create_login_token(session, members[0].id)
+    tok = create_login_token(session, members[0].user_id)
     auth_session = consume_login_token(session, tok.token)
     client.cookies.set(SESSION_COOKIE, auth_session.token)
     return client
 
 
 # ---------------------------------------------------------------------------
-# POST /claims/{id}/pay
+# POST /pools/{slug}/claims/{id}/pay
 # ---------------------------------------------------------------------------
 async def test_post_pay_admin_records_payout_and_redirects(
-    admin_client, session, approved_claim
+    admin_client, session, pool, approved_claim
 ):
     r = await admin_client.post(
-        f"/claims/{approved_claim.id}/pay",
+        f"/pools/{pool.slug}/claims/{approved_claim.id}/pay",
         data={
             "amount_dollars": "50.00",
             "paid_date": "2026-05-01",
@@ -64,7 +64,7 @@ async def test_post_pay_admin_records_payout_and_redirects(
         follow_redirects=False,
     )
     assert r.status_code == 303
-    assert r.headers["location"] == f"/claims/{approved_claim.id}"
+    assert r.headers["location"] == f"/pools/{pool.slug}/claims/{approved_claim.id}"
 
     session.expire_all()
     p = session.query(Payout).filter_by(claim_id=approved_claim.id).one()
@@ -75,10 +75,10 @@ async def test_post_pay_admin_records_payout_and_redirects(
 
 
 async def test_post_pay_writes_negative_ledger_entry(
-    admin_client, session, approved_claim
+    admin_client, session, pool, approved_claim
 ):
     await admin_client.post(
-        f"/claims/{approved_claim.id}/pay",
+        f"/pools/{pool.slug}/claims/{approved_claim.id}/pay",
         data={"amount_dollars": "50", "paid_date": "2026-05-01"},
     )
     session.expire_all()
@@ -87,32 +87,32 @@ async def test_post_pay_writes_negative_ledger_entry(
     assert le.balance_after == 95_000  # $1000 seed - $50
 
 
-async def test_post_pay_unauthenticated_is_401(client, approved_claim):
+async def test_post_pay_unauthenticated_is_401(client, pool, approved_claim):
     r = await client.post(
-        f"/claims/{approved_claim.id}/pay",
+        f"/pools/{pool.slug}/claims/{approved_claim.id}/pay",
         data={"amount_dollars": "50"},
     )
     assert r.status_code == 401
 
 
-async def test_post_pay_non_admin_is_403(member_client, approved_claim):
+async def test_post_pay_non_admin_is_403(member_client, pool, approved_claim):
     r = await member_client.post(
-        f"/claims/{approved_claim.id}/pay",
+        f"/pools/{pool.slug}/claims/{approved_claim.id}/pay",
         data={"amount_dollars": "50"},
     )
     assert r.status_code == 403
 
 
-async def test_post_pay_unknown_claim_is_400(admin_client):
+async def test_post_pay_unknown_claim_is_400(admin_client, pool):
     r = await admin_client.post(
-        "/claims/99999/pay",
+        f"/pools/{pool.slug}/claims/99999/pay",
         data={"amount_dollars": "50"},
     )
     assert r.status_code == 400
 
 
 async def test_post_pay_non_approved_claim_is_400(
-    admin_client, session, funded_pool, admin
+    admin_client, session, pool, funded_pool, admin
 ):
     voting_claim = submit_claim(
         session,
@@ -124,23 +124,23 @@ async def test_post_pay_non_approved_claim_is_400(
         occurred_at=datetime(2026, 4, 15, tzinfo=timezone.utc),
     )
     r = await admin_client.post(
-        f"/claims/{voting_claim.id}/pay",
+        f"/pools/{pool.slug}/claims/{voting_claim.id}/pay",
         data={"amount_dollars": "800"},
     )
     assert r.status_code == 400
 
 
-async def test_post_pay_zero_amount_is_400(admin_client, approved_claim):
+async def test_post_pay_zero_amount_is_400(admin_client, pool, approved_claim):
     r = await admin_client.post(
-        f"/claims/{approved_claim.id}/pay",
+        f"/pools/{pool.slug}/claims/{approved_claim.id}/pay",
         data={"amount_dollars": "0"},
     )
     assert r.status_code == 400
 
 
-async def test_post_pay_overdraw_is_400(admin_client, session, approved_claim):
+async def test_post_pay_overdraw_is_400(admin_client, session, pool, approved_claim):
     r = await admin_client.post(
-        f"/claims/{approved_claim.id}/pay",
+        f"/pools/{pool.slug}/claims/{approved_claim.id}/pay",
         data={"amount_dollars": "5000.00"},  # $5000 > $1000 in pool
     )
     assert r.status_code == 400
@@ -149,10 +149,10 @@ async def test_post_pay_overdraw_is_400(admin_client, session, approved_claim):
 
 
 async def test_post_pay_default_amount_is_requested_when_blank(
-    admin_client, session, approved_claim
+    admin_client, session, pool, approved_claim
 ):
     r = await admin_client.post(
-        f"/claims/{approved_claim.id}/pay",
+        f"/pools/{pool.slug}/claims/{approved_claim.id}/pay",
         data={"amount_dollars": "", "paid_date": "2026-05-01"},
     )
     assert r.status_code == 303
@@ -162,10 +162,10 @@ async def test_post_pay_default_amount_is_requested_when_blank(
 
 
 async def test_post_pay_default_paid_date_is_now_when_blank(
-    admin_client, session, approved_claim
+    admin_client, session, pool, approved_claim
 ):
     r = await admin_client.post(
-        f"/claims/{approved_claim.id}/pay",
+        f"/pools/{pool.slug}/claims/{approved_claim.id}/pay",
         data={"amount_dollars": "50", "paid_date": ""},
     )
     assert r.status_code == 303
@@ -175,10 +175,10 @@ async def test_post_pay_default_paid_date_is_now_when_blank(
 
 
 async def test_post_pay_partial_amount_allowed(
-    admin_client, session, approved_claim
+    admin_client, session, pool, approved_claim
 ):
     r = await admin_client.post(
-        f"/claims/{approved_claim.id}/pay",
+        f"/pools/{pool.slug}/claims/{approved_claim.id}/pay",
         data={"amount_dollars": "30.00", "paid_date": "2026-05-01"},
     )
     assert r.status_code == 303
@@ -193,29 +193,29 @@ async def test_post_pay_partial_amount_allowed(
 # Detail page integration
 # ---------------------------------------------------------------------------
 async def test_detail_admin_sees_pay_form_when_approved(
-    admin_client, approved_claim
+    admin_client, pool, approved_claim
 ):
-    r = await admin_client.get(f"/claims/{approved_claim.id}")
+    r = await admin_client.get(f"/pools/{pool.slug}/claims/{approved_claim.id}")
     assert r.status_code == 200
     assert "Mark as paid" in r.text or "amount_dollars" in r.text
 
 
 async def test_detail_member_does_not_see_pay_form(
-    member_client, approved_claim
+    member_client, pool, approved_claim
 ):
-    r = await member_client.get(f"/claims/{approved_claim.id}")
+    r = await member_client.get(f"/pools/{pool.slug}/claims/{approved_claim.id}")
     assert r.status_code == 200
     assert "Mark as paid" not in r.text
 
 
 async def test_detail_shows_payout_details_when_paid(
-    admin_client, session, approved_claim
+    admin_client, session, pool, approved_claim
 ):
     await admin_client.post(
-        f"/claims/{approved_claim.id}/pay",
+        f"/pools/{pool.slug}/claims/{approved_claim.id}/pay",
         data={"amount_dollars": "50", "paid_date": "2026-05-01", "notes": "Wire"},
     )
-    r = await admin_client.get(f"/claims/{approved_claim.id}")
+    r = await admin_client.get(f"/pools/{pool.slug}/claims/{approved_claim.id}")
     assert r.status_code == 200
     assert "Wire" in r.text  # notes shown
     assert "paid" in r.text.lower()

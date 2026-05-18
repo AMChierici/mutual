@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block title %}New pool — Mutual{% endblock %}
+{% block content %}
+<h1>Create a new pool</h1>
+<p>You'll be the only admin of this pool to start. Invite the rest from
+   the pool's members page after it's set up.</p>
+
+{% if errors %}
+<div class="errors">
+    <strong>Couldn't create the pool:</strong>
+    <ul>
+        {% for err in errors %}<li>{{ err }}</li>{% endfor %}
+    </ul>
+</div>
+{% endif %}
+
+<form method="post" action="/pools/new">
+    <fieldset>
+        <legend>Pool</legend>
+        <p><label>Name<br>
+            <input name="pool_name" required
+                   value="{{ values.get('pool_name', '') }}"></label></p>
+        <p><label>Currency (3-letter code, e.g. USD)<br>
+            <input name="currency" maxlength="3" minlength="3" required
+                   value="{{ values.get('currency', '') }}"></label></p>
+        <p><label>Starting balance (optional)<br>
+            <input type="number" step="0.01" min="0" name="starting_balance_dollars"
+                   value="{{ values.get('starting_balance_dollars', '') }}"></label></p>
+    </fieldset>
+
+    <fieldset>
+        <legend>Policy</legend>
+        <p><label>Template
+            <select name="policy_template_id"
+                    hx-get="/pools/new/policy"
+                    hx-trigger="change"
+                    hx-target="#policy-text-wrap"
+                    hx-include="[name='policy_template_id']">
+                <option value="">— none —</option>
+                {% for t in policy_templates %}
+                <option value="{{ t.id }}">{{ t.title }}</option>
+                {% endfor %}
+            </select>
+        </label></p>
+        <div id="policy-text-wrap">
+            {% include "setup/_policy_textarea.html" %}
+        </div>
+    </fieldset>
+
+    <fieldset>
+        <legend>Governance tiers</legend>
+        <p>Below the max amount goes to the chosen scheme. Last tier with
+           an empty "max" catches everything else.</p>
+        <p><label>Tier 1 max amount
+            <input type="number" step="0.01" min="0" name="tier_max_1" value="100"></label>
+            <label>scheme
+                <select name="tier_scheme_1">
+                    {% for s in schemes %}<option value="{{ s }}">{{ s }}</option>{% endfor %}
+                </select>
+            </label></p>
+        <p><label>Tier 2 max amount
+            <input type="number" step="0.01" min="0" name="tier_max_2" value="1000"></label>
+            <label>scheme
+                <select name="tier_scheme_2">
+                    {% for s in schemes %}<option value="{{ s }}" {% if s == "majority" %}selected{% endif %}>{{ s }}</option>{% endfor %}
+                </select>
+            </label></p>
+        <p><label>Catch-all (no max)
+            <input type="number" step="0.01" min="0" name="tier_max_3" placeholder="leave blank"></label>
+            <label>scheme
+                <select name="tier_scheme_3">
+                    {% for s in schemes %}<option value="{{ s }}" {% if s == "unanimous" %}selected{% endif %}>{{ s }}</option>{% endfor %}
+                </select>
+            </label></p>
+    </fieldset>
+
+    <button type="submit">Create pool</button>
+    <a href="/pools/">Cancel</a>
+</form>
+{% endblock %}

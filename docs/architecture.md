@@ -10,16 +10,27 @@
 
 ## Data model (target)
 
-```
-Pool
-  id, name, currency, created_at, policy_template_id, governance_config
+Identity is split: a `User` is the global account (one row per real person,
+keyed by email) and a `Membership` is that user's role inside a single pool.
+One user can have memberships in multiple pools — that's how multi-pool
+support works without making people maintain separate logins.
 
-Member
-  id, pool_id, display_name, joined_at, status, role
+```
+User
+  id, email (unique), display_name, is_platform_admin, created_at
+
+Pool
+  id, slug (unique), name, currency, created_at,
+  policy_template_id, governance_config, webhook_url
+
+Membership                              -- v0 called this "Member"
+  id, user_id, pool_id, display_name, joined_at, status, role
   (role: member | admin | observer)
+  unique(user_id, pool_id)
 
 Contribution
-  id, pool_id, member_id, amount, period (YYYY-MM), recorded_at, recorded_by
+  id, pool_id, member_id (-> memberships.id), amount, period,
+  recorded_at, recorded_by
 
 Claim
   id, pool_id, member_id, amount_requested, category, description,
@@ -27,19 +38,29 @@ Claim
   (status: submitted | voting | approved | rejected | paid | withdrawn)
 
 Vote
-  id, claim_id, member_id, decision, reason, cast_at
+  id, pool_id, claim_id, member_id, decision, reason, cast_at
   (decision: approve | reject | abstain)
 
 Payout
-  id, claim_id, amount_paid, paid_at, recorded_by, notes
+  id, pool_id, claim_id, amount_paid, paid_at, recorded_by, notes
 
 LedgerEntry
   id, pool_id, kind, ref_id, delta, balance_after, recorded_at
   (append-only; every contribution and payout produces one)
 
 AuditEvent
-  id, pool_id, actor_member_id, kind, payload_json, recorded_at
+  id, pool_id, actor_member_id (-> memberships.id), kind,
+  payload_json, recorded_at
+
+LoginToken / AuthSession
+  id, user_id, token, created_at, expires_at, ...
+  (account-scoped: one session covers all of the user's pools)
 ```
+
+The `member_id` columns on Contribution, Claim, Vote, Payout, and
+AuditEvent all point at `memberships.id` (a per-pool role), not at the
+global person. That keeps the audit trail honest when one human acts
+across multiple pools.
 
 ## Module boundaries
 

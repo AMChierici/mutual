@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}Members — {{ pool.name }} — Mutual{% endblock %}
+{% block content %}
+<header>
+    <h1>Members — {{ pool.name }}</h1>
+    <p><a href="/pools/{{ pool.slug }}/">← Dashboard</a>
+        · <a href="/pools/{{ pool.slug }}/members/invite">+ Invite a member</a></p>
+</header>
+
+{% if flash %}
+<p class="flash"><strong>{{ flash }}</strong></p>
+{% endif %}
+
+<p>{{ active_admin_count }} active admin{{ '' if active_admin_count == 1 else 's' }}.
+   The last active admin can't be demoted or deactivated.</p>
+
+<table>
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>Email</th>
+            <th>Role</th>
+            <th>Status</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for row in rows %}
+        <tr>
+            <td>{{ row.membership.display_name }}</td>
+            <td>{{ row.email or "—" }}</td>
+            <td>
+                <form method="post"
+                      action="/pools/{{ pool.slug }}/members/{{ row.membership.id }}/role"
+                      style="display: inline">
+                    <select name="role">
+                        {% for r in roles %}
+                        <option value="{{ r }}" {% if row.membership.role.value == r %}selected{% endif %}>{{ r }}</option>
+                        {% endfor %}
+                    </select>
+                    <button type="submit">Save</button>
+                </form>
+            </td>
+            <td>
+                <form method="post"
+                      action="/pools/{{ pool.slug }}/members/{{ row.membership.id }}/status"
+                      style="display: inline">
+                    <select name="status">
+                        {% for s in statuses %}
+                        <option value="{{ s }}" {% if row.membership.status.value == s %}selected{% endif %}>{{ s }}</option>
+                        {% endfor %}
+                    </select>
+                    <button type="submit">Save</button>
+                </form>
+            </td>
+            <td>
+                <form method="post"
+                      action="/pools/{{ pool.slug }}/members/{{ row.membership.id }}/magic-link"
+                      style="display: inline">
+                    <button type="submit">New magic link</button>
+                </form>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endblock %}

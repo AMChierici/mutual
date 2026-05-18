@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}Invite member — {{ pool.name }} — Mutual{% endblock %}
+{% block content %}
+<header>
+    <h1>Invite a member to {{ pool.name }}</h1>
+    <p><a href="/pools/{{ pool.slug }}/members">← Members</a></p>
+</header>
+
+{% if errors %}
+<div class="errors">
+    <strong>Couldn't send the invite:</strong>
+    <ul>{% for err in errors %}<li>{{ err }}</li>{% endfor %}</ul>
+</div>
+{% endif %}
+
+{% if login_url %}
+<div class="invite-success">
+    <p><strong>{{ invited_name }}</strong> has been added as <code>invited</code>.
+       Share this single-use, 24-hour magic link with them out-of-band
+       (Signal, WhatsApp, email — whatever your pool uses):</p>
+    <pre><code>{{ login_url }}</code></pre>
+    <p>Opening the link activates their account.
+       <a href="/pools/{{ pool.slug }}/members/invite">Invite another</a> ·
+       <a href="/pools/{{ pool.slug }}/members">Back to members</a></p>
+</div>
+{% else %}
+<form method="post" action="/pools/{{ pool.slug }}/members/invite">
+    <p><label>Display name (how they appear in this pool)<br>
+        <input name="display_name" required
+               value="{{ values.get('display_name', '') }}"></label></p>
+
+    <p><label>Email (the global account identity — reused if they already
+       have a Mutual account on another pool)<br>
+        <input name="email" type="email" required
+               value="{{ values.get('email', '') }}"></label></p>
+
+    <p><label>Role
+        <select name="role">
+            {% for r in roles %}
+            <option value="{{ r }}"
+                {% if (values.get('role') or 'member') == r %}selected{% endif %}>{{ r }}</option>
+            {% endfor %}
+        </select>
+    </label></p>
+
+    <button type="submit">Send invite</button>
+</form>
+{% endif %}
+{% endblock %}

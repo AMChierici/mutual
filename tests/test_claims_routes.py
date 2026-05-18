@@ -25,22 +25,22 @@ def _isolated_uploads(tmp_path, monkeypatch):
 async def member_client(client, session, members) -> AsyncClient:
     """An HTTP client carrying a session cookie for an active member
     (members[0])."""
-    tok = create_login_token(session, members[0].id)
+    tok = create_login_token(session, members[0].user_id)
     auth_session = consume_login_token(session, tok.token)
     client.cookies.set(SESSION_COOKIE, auth_session.token)
     return client
 
 
 # ---------------------------------------------------------------------------
-# GET /claims/new
+# GET /pools/{slug}/claims/new
 # ---------------------------------------------------------------------------
-async def test_get_claim_form_unauthenticated_is_401(client):
-    r = await client.get("/claims/new")
+async def test_get_claim_form_unauthenticated_is_401(client, pool):
+    r = await client.get(f"/pools/{pool.slug}/claims/new")
     assert r.status_code == 401
 
 
-async def test_get_claim_form_active_member_renders(member_client):
-    r = await member_client.get("/claims/new")
+async def test_get_claim_form_active_member_renders(member_client, pool):
+    r = await member_client.get(f"/pools/{pool.slug}/claims/new")
     assert r.status_code == 200
     assert 'name="amount_dollars"' in r.text
     assert 'name="category"' in r.text
@@ -50,13 +50,13 @@ async def test_get_claim_form_active_member_renders(member_client):
 
 
 # ---------------------------------------------------------------------------
-# POST /claims
+# POST /pools/{slug}/claims
 # ---------------------------------------------------------------------------
 async def test_post_claim_routes_small_amount_to_approved(
-    member_client, session, members
+    member_client, session, pool, members
 ):
     r = await member_client.post(
-        "/claims",
+        f"/pools/{pool.slug}/claims",
         data={
             "amount_dollars": "50.00",
             "category": "medical",
@@ -76,10 +76,10 @@ async def test_post_claim_routes_small_amount_to_approved(
 
 
 async def test_post_claim_routes_medium_amount_to_voting(
-    member_client, session
+    member_client, session, pool
 ):
     r = await member_client.post(
-        "/claims",
+        f"/pools/{pool.slug}/claims",
         data={
             "amount_dollars": "800.00",
             "category": "dental",
@@ -95,10 +95,10 @@ async def test_post_claim_routes_medium_amount_to_voting(
 
 
 async def test_post_claim_persists_uploads(
-    member_client, session, tmp_path
+    member_client, session, pool, tmp_path
 ):
     r = await member_client.post(
-        "/claims",
+        f"/pools/{pool.slug}/claims",
         data={
             "amount_dollars": "50.00",
             "category": "medical",
@@ -123,9 +123,9 @@ async def test_post_claim_persists_uploads(
     assert p1.is_file() and p1.read_bytes().startswith(b"\x89PNG")
 
 
-async def test_post_claim_rejects_non_image_upload(member_client):
+async def test_post_claim_rejects_non_image_upload(member_client, pool):
     r = await member_client.post(
-        "/claims",
+        f"/pools/{pool.slug}/claims",
         data={
             "amount_dollars": "50.00",
             "category": "medical",
@@ -137,10 +137,10 @@ async def test_post_claim_rejects_non_image_upload(member_client):
     assert r.status_code == 400
 
 
-async def test_post_claim_rejects_too_big_upload(member_client):
+async def test_post_claim_rejects_too_big_upload(member_client, pool):
     big = b"\xff\xd8" + b"\x00" * (10 * 1024 * 1024 + 1)
     r = await member_client.post(
-        "/claims",
+        f"/pools/{pool.slug}/claims",
         data={
             "amount_dollars": "50.00",
             "category": "medical",
@@ -152,13 +152,13 @@ async def test_post_claim_rejects_too_big_upload(member_client):
     assert r.status_code == 413
 
 
-async def test_post_claim_rejects_too_many_uploads(member_client):
+async def test_post_claim_rejects_too_many_uploads(member_client, pool):
     files = [
         ("photos", (f"r{i}.jpg", b"\xff\xd8jpeg", "image/jpeg"))
         for i in range(11)
     ]
     r = await member_client.post(
-        "/claims",
+        f"/pools/{pool.slug}/claims",
         data={
             "amount_dollars": "50.00",
             "category": "medical",
@@ -170,9 +170,9 @@ async def test_post_claim_rejects_too_many_uploads(member_client):
     assert r.status_code == 400
 
 
-async def test_post_claim_rejects_zero_amount(member_client):
+async def test_post_claim_rejects_zero_amount(member_client, pool):
     r = await member_client.post(
-        "/claims",
+        f"/pools/{pool.slug}/claims",
         data={
             "amount_dollars": "0",
             "category": "medical",
@@ -183,9 +183,9 @@ async def test_post_claim_rejects_zero_amount(member_client):
     assert r.status_code == 400
 
 
-async def test_post_claim_writes_audit_event(member_client, session):
+async def test_post_claim_writes_audit_event(member_client, session, pool):
     await member_client.post(
-        "/claims",
+        f"/pools/{pool.slug}/claims",
         data={
             "amount_dollars": "50.00",
             "category": "medical",
@@ -199,9 +199,9 @@ async def test_post_claim_writes_audit_event(member_client, session):
     assert audit.payload_json["initial_status"] == "approved"
 
 
-async def test_post_claim_unauthenticated_is_401(client):
+async def test_post_claim_unauthenticated_is_401(client, pool):
     r = await client.post(
-        "/claims",
+        f"/pools/{pool.slug}/claims",
         data={
             "amount_dollars": "50",
             "category": "x",
@@ -217,19 +217,20 @@ async def test_post_claim_inactive_member_is_401(client, session, members):
     in that the route never accepts them."""
     members[0].status = MemberStatus.inactive
     session.commit()
-    tok = create_login_token(session, members[0].id)
-    # consume_login_token rejects inactive members at the service layer
+    tok = create_login_token(session, members[0].user_id)
+    # consume_login_token rejects users with no active memberships at the
+    # service layer.
     from api.auth import AuthError
     with pytest.raises(AuthError):
         consume_login_token(session, tok.token)
 
 
 # ---------------------------------------------------------------------------
-# GET /claims and /claims/{id}
+# GET /pools/{slug}/claims and /pools/{slug}/claims/{id}
 # ---------------------------------------------------------------------------
-async def test_get_claim_detail_owner_sees_own(member_client, session, members):
+async def test_get_claim_detail_owner_sees_own(member_client, session, pool, members):
     await member_client.post(
-        "/claims",
+        f"/pools/{pool.slug}/claims",
         data={
             "amount_dollars": "50",
             "category": "medical",
@@ -239,22 +240,22 @@ async def test_get_claim_detail_owner_sees_own(member_client, session, members):
     )
     session.expire_all()
     claim = session.query(Claim).one()
-    r = await member_client.get(f"/claims/{claim.id}")
+    r = await member_client.get(f"/pools/{pool.slug}/claims/{claim.id}")
     assert r.status_code == 200
     assert "medical" in r.text
     assert members[0].display_name in r.text
 
 
 async def test_get_claim_detail_other_member_can_see(
-    client, session, admin, members
+    client, session, pool, admin, members
 ):
     """Mutual-aid transparency: any active member can see any claim."""
     # members[0] submits
-    tok = create_login_token(session, members[0].id)
+    tok = create_login_token(session, members[0].user_id)
     auth_session = consume_login_token(session, tok.token)
     client.cookies.set(SESSION_COOKIE, auth_session.token)
     await client.post(
-        "/claims",
+        f"/pools/{pool.slug}/claims",
         data={
             "amount_dollars": "50",
             "category": "medical",
@@ -267,22 +268,22 @@ async def test_get_claim_detail_other_member_can_see(
 
     # members[1] views
     client.cookies.delete(SESSION_COOKIE)
-    tok2 = create_login_token(session, members[1].id)
+    tok2 = create_login_token(session, members[1].user_id)
     auth_session2 = consume_login_token(session, tok2.token)
     client.cookies.set(SESSION_COOKIE, auth_session2.token)
-    r = await client.get(f"/claims/{claim.id}")
+    r = await client.get(f"/pools/{pool.slug}/claims/{claim.id}")
     assert r.status_code == 200
     assert "first" in r.text
 
 
-async def test_get_claim_detail_unknown_id_is_404(member_client):
-    r = await member_client.get("/claims/99999")
+async def test_get_claim_detail_unknown_id_is_404(member_client, pool):
+    r = await member_client.get(f"/pools/{pool.slug}/claims/99999")
     assert r.status_code == 404
 
 
-async def test_get_claims_list_renders(member_client, session, members):
+async def test_get_claims_list_renders(member_client, session, pool, members):
     await member_client.post(
-        "/claims",
+        f"/pools/{pool.slug}/claims",
         data={
             "amount_dollars": "50",
             "category": "medical",
@@ -291,7 +292,7 @@ async def test_get_claims_list_renders(member_client, session, members):
         },
     )
     await member_client.post(
-        "/claims",
+        f"/pools/{pool.slug}/claims",
         data={
             "amount_dollars": "800",
             "category": "dental",
@@ -299,7 +300,7 @@ async def test_get_claims_list_renders(member_client, session, members):
             "occurred_date": "2026-04-16",
         },
     )
-    r = await member_client.get("/claims")
+    r = await member_client.get(f"/pools/{pool.slug}/claims")
     assert r.status_code == 200
     # List view shows category + status (descriptions are on the detail page).
     assert "medical" in r.text
@@ -310,17 +311,17 @@ async def test_get_claims_list_renders(member_client, session, members):
     assert session.query(Claim).count() == 2
 
 
-async def test_get_claims_list_unauthenticated_is_401(client):
-    r = await client.get("/claims")
+async def test_get_claims_list_unauthenticated_is_401(client, pool):
+    r = await client.get(f"/pools/{pool.slug}/claims")
     assert r.status_code == 401
 
 
 # ---------------------------------------------------------------------------
-# GET /claims/{id}/evidence/{index}
+# GET /pools/{slug}/claims/{id}/evidence/{index}
 # ---------------------------------------------------------------------------
-async def test_get_claim_evidence_serves_file(member_client, session):
+async def test_get_claim_evidence_serves_file(member_client, session, pool):
     await member_client.post(
-        "/claims",
+        f"/pools/{pool.slug}/claims",
         data={
             "amount_dollars": "50",
             "category": "medical",
@@ -331,19 +332,21 @@ async def test_get_claim_evidence_serves_file(member_client, session):
     )
     session.expire_all()
     claim = session.query(Claim).one()
-    r = await member_client.get(f"/claims/{claim.id}/evidence/0")
+    r = await member_client.get(f"/pools/{pool.slug}/claims/{claim.id}/evidence/0")
     assert r.status_code == 200
     assert r.content == b"\xff\xd8\xff body"
 
 
-async def test_get_claim_evidence_unauthenticated_is_401(client, session, members):
+async def test_get_claim_evidence_unauthenticated_is_401(
+    client, session, pool, members
+):
     """Filenames aren't guessable, but the route must not leak even if
     they were."""
-    tok = create_login_token(session, members[0].id)
+    tok = create_login_token(session, members[0].user_id)
     auth_session = consume_login_token(session, tok.token)
     client.cookies.set(SESSION_COOKIE, auth_session.token)
     await client.post(
-        "/claims",
+        f"/pools/{pool.slug}/claims",
         data={
             "amount_dollars": "50",
             "category": "medical",
@@ -356,13 +359,13 @@ async def test_get_claim_evidence_unauthenticated_is_401(client, session, member
     claim = session.query(Claim).one()
 
     client.cookies.delete(SESSION_COOKIE)
-    r = await client.get(f"/claims/{claim.id}/evidence/0")
+    r = await client.get(f"/pools/{pool.slug}/claims/{claim.id}/evidence/0")
     assert r.status_code == 401
 
 
-async def test_get_claim_evidence_unknown_index_is_404(member_client, session):
+async def test_get_claim_evidence_unknown_index_is_404(member_client, session, pool):
     await member_client.post(
-        "/claims",
+        f"/pools/{pool.slug}/claims",
         data={
             "amount_dollars": "50",
             "category": "medical",
@@ -372,5 +375,5 @@ async def test_get_claim_evidence_unknown_index_is_404(member_client, session):
     )
     session.expire_all()
     claim = session.query(Claim).one()
-    r = await member_client.get(f"/claims/{claim.id}/evidence/99")
+    r = await member_client.get(f"/pools/{pool.slug}/claims/{claim.id}/evidence/99")
     assert r.status_code == 404

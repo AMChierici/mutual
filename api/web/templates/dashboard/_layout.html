@@ -12,24 +12,26 @@
         {% if active_tab == "overview" %}
             <strong>Overview</strong>
         {% else %}
-            <a href="/">Overview</a>
+            <a href="/pools/{{ pool.slug }}/">Overview</a>
         {% endif %}
         ·
         {% if active_tab == "models" %}
             <strong>Model output</strong>
         {% else %}
-            <a href="/models">Model output</a>
+            <a href="/pools/{{ pool.slug }}/models">Model output</a>
         {% endif %}
     </nav>
     <p>
-        <a href="/claims">All claims</a>
-        · <a href="/claims/new">+ Submit claim</a>
-        · <a href="/claims/pending">Pending votes</a>
-        · <a href="/audit">Audit log</a>
+        <a href="/pools/{{ pool.slug }}/claims">All claims</a>
+        · <a href="/pools/{{ pool.slug }}/claims/new">+ Submit claim</a>
+        · <a href="/pools/{{ pool.slug }}/claims/pending">Pending votes</a>
+        · <a href="/pools/{{ pool.slug }}/audit">Audit log</a>
         {% if is_admin %}
-        · <a href="/contributions/bulk">Record contributions</a>
-        · <a href="/settings">Settings</a>
+        · <a href="/pools/{{ pool.slug }}/contributions/bulk">Record contributions</a>
+        · <a href="/pools/{{ pool.slug }}/members">Members</a>
+        · <a href="/pools/{{ pool.slug }}/settings">Settings</a>
         {% endif %}
+        · <a href="/pools/">Switch pool</a>
     </p>
 </header>
 

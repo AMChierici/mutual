@@ -1,0 +1,48 @@
+# Render Blueprint for Mutual.
+# https://render.com/docs/blueprint-spec
+#
+# Deploy this repo with one click from a phone:
+#   1. Sign in to https://render.com on mobile.
+#   2. "New +" → "Blueprint" → connect this GitHub repo
+#      (AMChierici/mutual, branch claude/multi-account-admin-features-yjqUS).
+#   3. Render reads this file, creates one web service + one 1 GB disk.
+#   4. Fill in `MUTUAL_PLATFORM_ADMIN_EMAIL` when prompted (or skip — the
+#      /admin view is opt-in).
+#   5. Apply → wait ~3 min → open the *.onrender.com URL on your phone.
+#
+# Why Starter (and not Free)?
+#   Render's Free tier doesn't offer persistent disks. Mutual's audit log
+#   and balance ledger live in SQLite on disk, so a disk-less host means
+#   the data resets every cold start. Starter is ~$7/mo for always-on
+#   compute plus ~$0.25/GB/mo for the disk — fine for a household pool.
+
+services:
+  - type: web
+    name: mutual
+    runtime: docker
+    plan: starter
+    region: oregon          # change to "frankfurt" / "singapore" / etc. if closer
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /health
+    autoDeploy: true        # redeploy on every push to the connected branch
+    envVars:
+      # SQLite lives on the persistent disk so audits + balances survive
+      # restarts and redeploys.
+      - key: MUTUAL_DB_PATH
+        value: /app/data/db/mutual.sqlite
+
+      # The email here gets is_platform_admin=True on every startup and
+      # unlocks the /admin view for the matching user. Leave it unset to
+      # disable the cross-pool operator view.
+      - key: MUTUAL_PLATFORM_ADMIN_EMAIL
+        sync: false         # prompted in the Render UI, never committed
+
+      # Flip to "1" only while debugging — when set, /admin/* shows raw
+      # claim descriptions, evidence URIs, and full email addresses.
+      - key: MUTUAL_PLATFORM_ADMIN_SEES_PII
+        value: ""
+
+    disk:
+      name: mutual-data
+      mountPath: /app/data
+      sizeGB: 1

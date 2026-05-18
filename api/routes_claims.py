@@ -1,4 +1,4 @@
-"""HTTP routes for submitting and viewing claims."""
+"""HTTP routes for submitting and viewing claims (pool-scoped)."""
 from __future__ import annotations
 
 from datetime import datetime, time, timezone
@@ -15,28 +15,20 @@ from fastapi import (
     status,
 )
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from api.auth import current_member, require_admin
+from api.auth import current_membership_for_pool, require_pool_admin
 from api.claims import submit_claim
-from api.deps import get_db
-from api.orm import Claim, ClaimStatus, Member, Payout, Pool, Vote, VoteDecision
+from api.deps import get_db, get_pool_from_slug
+from api.orm import Claim, ClaimStatus, Member, Membership, Payout, Pool, Vote, VoteDecision
 from api.payouts import record_payout
 from api.storage import get_uploads_dir
 from api.voting import cast_vote, list_pending_for_member
 
-router = APIRouter(prefix="/claims", tags=["claims"])
+router = APIRouter(prefix="/pools/{pool_slug}/claims", tags=["claims"])
 
 MAX_FILE_BYTES = 10 * 1024 * 1024  # 10 MiB
 MAX_FILES_PER_CLAIM = 10
-
-
-def _the_pool(db: Session) -> Pool:
-    pool = db.scalars(select(Pool)).first()
-    if pool is None:
-        raise HTTPException(status.HTTP_409_CONFLICT, "pool not initialized")
-    return pool
 
 
 def _dollars_to_cents(raw: str) -> int:
@@ -60,22 +52,31 @@ def _parse_occurred_date(raw: str) -> datetime:
     return datetime.combine(d, time.min, tzinfo=timezone.utc)
 
 
+def _ensure_in_pool(claim: Claim | None, pool: Pool) -> Claim:
+    """404 if the claim doesn't exist OR belongs to a different pool —
+    same outward error so we don't leak cross-pool existence."""
+    if claim is None or claim.pool_id != pool.id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND)
+    return claim
+
+
 # ---------------------------------------------------------------------------
 # Listing + form + pending (registered before /{claim_id} for path priority)
 # ---------------------------------------------------------------------------
 @router.get("/pending", response_class=HTMLResponse)
 def pending_for_me(
     request: Request,
+    pool: Pool = Depends(get_pool_from_slug),
     db: Session = Depends(get_db),
-    member: Member = Depends(current_member),
+    member: Membership = Depends(current_membership_for_pool),
 ) -> HTMLResponse:
-    pool = _the_pool(db)
     claims = list_pending_for_member(db, pool_id=pool.id, member_id=member.id)
     templates = request.app.state.templates
     return templates.TemplateResponse(
         request,
         "claims/pending.html",
         {
+            "pool": pool,
             "claims": claims,
             "currency": pool.currency,
         },
@@ -85,15 +86,16 @@ def pending_for_me(
 @router.get("/new", response_class=HTMLResponse)
 def new_claim_form(
     request: Request,
+    pool: Pool = Depends(get_pool_from_slug),
     db: Session = Depends(get_db),
-    member: Member = Depends(current_member),
+    member: Membership = Depends(current_membership_for_pool),
 ) -> HTMLResponse:
-    pool = _the_pool(db)
     templates = request.app.state.templates
     return templates.TemplateResponse(
         request,
         "claims/new.html",
         {
+            "pool": pool,
             "currency": pool.currency,
             "today": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
             "max_file_mb": MAX_FILE_BYTES // (1024 * 1024),
@@ -105,10 +107,10 @@ def new_claim_form(
 @router.get("", response_class=HTMLResponse)
 def list_claims(
     request: Request,
+    pool: Pool = Depends(get_pool_from_slug),
     db: Session = Depends(get_db),
-    member: Member = Depends(current_member),
+    member: Membership = Depends(current_membership_for_pool),
 ) -> HTMLResponse:
-    pool = _the_pool(db)
     claims = (
         db.query(Claim)
         .filter_by(pool_id=pool.id)
@@ -121,6 +123,7 @@ def list_claims(
         request,
         "claims/list.html",
         {
+            "pool": pool,
             "claims": claims,
             "members_by_id": members_by_id,
             "currency": pool.currency,
@@ -139,11 +142,10 @@ async def post_claim(
     description: str = Form(...),
     occurred_date: str = Form(...),
     photos: list[UploadFile] = File(default_factory=list),
+    pool: Pool = Depends(get_pool_from_slug),
     db: Session = Depends(get_db),
-    member: Member = Depends(current_member),
+    member: Membership = Depends(current_membership_for_pool),
 ) -> RedirectResponse:
-    pool = _the_pool(db)
-
     amount_cents = _dollars_to_cents(amount_dollars)
     occurred_at = _parse_occurred_date(occurred_date)
 
@@ -187,7 +189,8 @@ async def post_claim(
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
 
     return RedirectResponse(
-        f"/claims/{claim.id}", status_code=status.HTTP_303_SEE_OTHER
+        f"/pools/{pool.slug}/claims/{claim.id}",
+        status_code=status.HTTP_303_SEE_OTHER,
     )
 
 
@@ -198,13 +201,11 @@ async def post_claim(
 def claim_detail(
     claim_id: int,
     request: Request,
+    pool: Pool = Depends(get_pool_from_slug),
     db: Session = Depends(get_db),
-    member: Member = Depends(current_member),
+    member: Membership = Depends(current_membership_for_pool),
 ) -> HTMLResponse:
-    claim = db.get(Claim, claim_id)
-    if claim is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND)
-    pool = _the_pool(db)
+    claim = _ensure_in_pool(db.get(Claim, claim_id), pool)
     submitter = db.get(Member, claim.member_id)
     members_by_id = {m.id: m for m in db.query(Member).filter_by(pool_id=pool.id).all()}
     votes = (
@@ -231,6 +232,7 @@ def claim_detail(
         request,
         "claims/detail.html",
         {
+            "pool": pool,
             "claim": claim,
             "submitter": submitter,
             "currency": pool.currency,
@@ -253,11 +255,12 @@ def post_pay(
     amount_dollars: str = Form(""),
     paid_date: str = Form(""),
     notes: str = Form(""),
+    pool: Pool = Depends(get_pool_from_slug),
     db: Session = Depends(get_db),
-    admin: Member = Depends(require_admin),
+    admin: Membership = Depends(require_pool_admin),
 ) -> RedirectResponse:
     claim = db.get(Claim, claim_id)
-    if claim is None:
+    if claim is None or claim.pool_id != pool.id:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "claim not found")
 
     # Default to the requested amount when the field is blank.
@@ -284,7 +287,8 @@ def post_pay(
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
 
     return RedirectResponse(
-        f"/claims/{claim_id}", status_code=status.HTTP_303_SEE_OTHER
+        f"/pools/{pool.slug}/claims/{claim_id}",
+        status_code=status.HTTP_303_SEE_OTHER,
     )
 
 
@@ -293,9 +297,14 @@ def post_vote(
     claim_id: int,
     decision: str = Form(...),
     reason: str = Form(""),
+    pool: Pool = Depends(get_pool_from_slug),
     db: Session = Depends(get_db),
-    member: Member = Depends(current_member),
+    member: Membership = Depends(current_membership_for_pool),
 ) -> RedirectResponse:
+    claim = db.get(Claim, claim_id)
+    if claim is None or claim.pool_id != pool.id:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "claim not found")
+
     decision_clean = (decision or "").strip().lower()
     try:
         decision_enum = VoteDecision(decision_clean)
@@ -323,7 +332,8 @@ def post_vote(
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
 
     return RedirectResponse(
-        "/claims/pending", status_code=status.HTTP_303_SEE_OTHER
+        f"/pools/{pool.slug}/claims/pending",
+        status_code=status.HTTP_303_SEE_OTHER,
     )
 
 
@@ -331,12 +341,11 @@ def post_vote(
 def claim_evidence(
     claim_id: int,
     index: int,
+    pool: Pool = Depends(get_pool_from_slug),
     db: Session = Depends(get_db),
-    member: Member = Depends(current_member),
+    member: Membership = Depends(current_membership_for_pool),
 ) -> FileResponse:
-    claim = db.get(Claim, claim_id)
-    if claim is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND)
+    claim = _ensure_in_pool(db.get(Claim, claim_id), pool)
     if index < 0 or index >= len(claim.evidence_uris):
         raise HTTPException(status.HTTP_404_NOT_FOUND)
 

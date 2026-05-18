@@ -17,6 +17,7 @@ from api.orm import (
     MemberRole,
     MemberStatus,
     Pool,
+    User,
 )
 
 
@@ -80,7 +81,7 @@ def test_empty_governance_falls_back_to_unanimous():
 # ---------------------------------------------------------------------------
 @pytest.fixture
 def governed_pool(session):
-    p = Pool(name="P", currency="USD", governance_config=_GOVERNANCE)
+    p = Pool(slug="governed-pool", name="P", currency="USD", governance_config=_GOVERNANCE)
     session.add(p)
     session.commit()
     return p
@@ -88,7 +89,11 @@ def governed_pool(session):
 
 @pytest.fixture
 def active_member(session, governed_pool):
+    u = User(email="bo-active@example.test", display_name="Bo")
+    session.add(u)
+    session.flush()
     m = Member(
+        user_id=u.id,
         pool_id=governed_pool.id,
         display_name="Bo",
         role=MemberRole.member,
@@ -223,7 +228,11 @@ def test_submit_claim_rejects_empty_description(session, governed_pool, active_m
 
 
 def test_submit_claim_rejects_inactive_member(session, governed_pool):
+    u = User(email="inactive@example.test", display_name="X")
+    session.add(u)
+    session.flush()
     inactive = Member(
+        user_id=u.id,
         pool_id=governed_pool.id,
         display_name="X",
         role=MemberRole.member,
@@ -244,11 +253,14 @@ def test_submit_claim_rejects_inactive_member(session, governed_pool):
 
 
 def test_submit_claim_rejects_member_in_other_pool(session, governed_pool):
-    other = Pool(name="O", currency="USD", governance_config=_GOVERNANCE)
+    other = Pool(slug="other-claims", name="O", currency="USD", governance_config=_GOVERNANCE)
     session.add(other)
     session.commit()
+    foreign_user = User(email="foreign-claims@example.test", display_name="F")
+    session.add(foreign_user)
+    session.flush()
     foreign = Member(
-        pool_id=other.id, display_name="F",
+        user_id=foreign_user.id, pool_id=other.id, display_name="F",
         role=MemberRole.member, status=MemberStatus.active,
     )
     session.add(foreign)

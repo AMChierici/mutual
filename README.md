@@ -55,6 +55,21 @@ That's it for the install. The container runs Alembic migrations on startup
 so the database is ready before the first request. Visit
 `http://localhost:8000` and you'll be redirected to `/setup`.
 
+### One-tap cloud deploy (phone-friendly)
+
+If you want a public HTTPS URL to install the PWA on a phone, the repo
+ships a [Render](https://render.com) blueprint:
+
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/AMChierici/mutual)
+
+Render reads [`render.yaml`](render.yaml), provisions a 1 GB persistent
+disk for the SQLite file, sets `MUTUAL_DB_PATH`, and prompts for the
+optional `MUTUAL_PLATFORM_ADMIN_EMAIL`. Total time from tap to live
+URL: about three minutes. The Starter plan ($7/mo) keeps the service
+warm; the disk runs about $0.25/mo per GB. (Free tier is not viable —
+Render's free hosts have no persistent disk, so SQLite resets on every
+cold start.)
+
 For a complete first-day walkthrough — including a real 4-person family
 example, the weekly rhythm, and how to invite the rest of your group — read
 **[`docs/getting-started.md`](docs/getting-started.md)**. It's the right
@@ -77,7 +92,8 @@ design.
 
 ## Architecture (one paragraph)
 
-Local-first single-pool-per-install web app. FastAPI for routes; SQLAlchemy 2
+Local-first multi-pool web app — one install can host any number of pools,
+and a user can belong to several at once. FastAPI for routes; SQLAlchemy 2
 ORM over SQLite (Alembic migrations); Jinja templates with HTMX for
 interactive bits; no JavaScript framework. Every state change writes one
 `AuditEvent` row, and the same change can fire one outbound webhook (POST
@@ -112,7 +128,7 @@ alembic/     migrations
 | --- | --- |
 | 1 | Database layer (SQLAlchemy ORM + Alembic) |
 | 2 | Magic-link auth, server-side sessions |
-| 3 | Setup wizard (one pool per install) |
+| 3 | Setup wizard (first-run) + create-additional-pool flow under `/pools/new` |
 | 4 | Contributions (single + weekly bulk close) |
 | 5 | Claims (with photo evidence) |
 | 6 | Voting + tier-routed governance |
@@ -127,9 +143,27 @@ and **recorded date** (when the row was written).
 
 Known gaps documented in [`docs/getting-started.md`](docs/getting-started.md):
 
-- No member-management UI yet — invite via shell snippet
 - No built-in email notifications — wire the outbound webhook to a bot
-- One pool per install — multi-pool is post-v0
+
+Mutual is a Progressive Web App: install it on a phone home-screen from
+Android Chrome or iOS Safari and it runs in its own window with offline
+shell caching. See [`docs/getting-started.md`](docs/getting-started.md)
+for the install steps.
+
+For self-hosters running multiple pools on one box, see
+[`docs/platform-admin.md`](docs/platform-admin.md) for the operator
+view (read-only, opt-in via `MUTUAL_PLATFORM_ADMIN_EMAIL`).
+
+**Upgrading from a v0 (pre-multi-account) install:** running
+`alembic upgrade head` migrates an existing single-pool install into the
+new multi-pool shape. Adds a `users` table, renames `members` →
+`memberships`, gives each pool a slug, rewires auth tokens to bind to a
+user instead of a single membership, and rewrites all pool-scoped URLs to
+live under `/pools/{slug}/...`. Existing data is auto-migrated: the
+existing pool gets a slug derived from its name, members without an email
+get a placeholder `user+<id>@local.invalid`, and old bookmarks
+(`/claims`, `/audit`, etc.) 303 to `/pools/{your-slug}/...` for one
+release before the redirect is removed.
 
 We're running it on real family pools to find the sharp edges. **Don't
 trust it with money you can't afford to lose track of yet.**

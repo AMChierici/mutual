@@ -15,7 +15,7 @@ from api.orm import AuditEvent, MemberStatus
 # ---------------------------------------------------------------------------
 @pytest_asyncio.fixture
 async def member_client(client, session, members) -> AsyncClient:
-    tok = create_login_token(session, members[0].id)
+    tok = create_login_token(session, members[0].user_id)
     auth_session = consume_login_token(session, tok.token)
     client.cookies.set(SESSION_COOKIE, auth_session.token)
     return client
@@ -45,7 +45,7 @@ async def test_post_magic_link_emits_audit_event(admin_client, session, members)
 async def test_login_emits_audit_event(client, session, members):
     members[0].status = MemberStatus.active
     session.commit()
-    tok = create_login_token(session, members[0].id)
+    tok = create_login_token(session, members[0].user_id)
     r = await client.get(f"/auth/login/{tok.token}")
     assert r.status_code == 200
     session.expire_all()
@@ -103,7 +103,7 @@ def test_list_audit_events_caps_at_limit(session, pool, admin):
 def test_list_audit_events_filters_to_pool(session, pool, admin):
     """Insert an audit event for a different pool; the listing must skip it."""
     from api.orm import Pool
-    other = Pool(name="O", currency="USD", governance_config={})
+    other = Pool(slug="audit-other", name="O", currency="USD", governance_config={})
     session.add(other)
     session.commit()
     session.add(
@@ -123,7 +123,7 @@ def test_list_audit_events_filters_to_pool(session, pool, admin):
 # Route: GET /audit
 # ---------------------------------------------------------------------------
 async def test_get_audit_unauthenticated_is_401(client, pool):
-    r = await client.get("/audit")
+    r = await client.get(f"/pools/{pool.slug}/audit")
     assert r.status_code == 401
 
 
@@ -132,7 +132,7 @@ async def test_get_audit_renders_events(admin_client, session, pool, admin):
         session, pool_id=pool.id, member_id=admin.id,
         amount_cents=12_500, period="2026-W01", recorded_by=admin.id,
     )
-    r = await admin_client.get("/audit")
+    r = await admin_client.get(f"/pools/{pool.slug}/audit")
     assert r.status_code == 200
     body = r.text
     assert "contribution.recorded" in body
@@ -151,7 +151,7 @@ async def test_get_audit_handles_null_actor(admin_client, session, pool):
         )
     )
     session.commit()
-    r = await admin_client.get("/audit")
+    r = await admin_client.get(f"/pools/{pool.slug}/audit")
     assert r.status_code == 200
     assert "system.startup" in r.text
 
@@ -162,7 +162,7 @@ async def test_get_audit_member_can_see(member_client, session, pool, admin):
         session, pool_id=pool.id, member_id=admin.id,
         amount_cents=100, period="2026-W01", recorded_by=admin.id,
     )
-    r = await member_client.get("/audit")
+    r = await member_client.get(f"/pools/{pool.slug}/audit")
     assert r.status_code == 200
     assert "contribution.recorded" in r.text
 
@@ -187,7 +187,7 @@ async def test_get_audit_includes_each_lifecycle_kind_after_full_run(
     record_payout(
         session, claim_id=claim.id, amount_paid_cents=5_000, recorded_by=admin.id,
     )
-    r = await admin_client.get("/audit")
+    r = await admin_client.get(f"/pools/{pool.slug}/audit")
     body = r.text
     for kind in (
         "contribution.recorded",

@@ -53,7 +53,7 @@ def test_is_first_run_true_on_empty_db(session):
 
 
 def test_is_first_run_false_after_pool_created(session):
-    session.add(Pool(name="P", currency="USD", governance_config={}))
+    session.add(Pool(slug="p", name="P", currency="USD", governance_config={}))
     session.commit()
     assert is_first_run(session) is False
 
@@ -89,12 +89,18 @@ def test_complete_setup_returns_login_url_and_session_token(session):
     result = complete_setup(session, _basic_request())
     assert result.admin_login_url.startswith("/auth/login/")
     assert result.admin_session_token  # non-empty
-    # Session is persisted and active
+    # The session is persisted and active under the admin's User.
+    admin_membership = session.get(Member, result.admin_member_id)
     s = session.query(AuthSession).filter_by(token=result.admin_session_token).one()
-    assert s.member_id == result.admin_member_id
+    assert s.user_id == admin_membership.user_id
     assert s.revoked_at is None
     # Login token is also persisted (so admin can log in from another device)
-    assert session.query(LoginToken).filter_by(member_id=result.admin_member_id).count() == 1
+    assert (
+        session.query(LoginToken)
+        .filter_by(user_id=admin_membership.user_id)
+        .count()
+        == 1
+    )
 
 
 def test_complete_setup_writes_opening_balance_ledger_entry(session):

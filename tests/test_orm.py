@@ -5,6 +5,7 @@ Schema mirrors docs/architecture.md exactly.
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from itertools import count
 
 import pytest
 from sqlalchemy import inspect, select
@@ -22,6 +23,7 @@ from api.orm import (
     MemberStatus,
     Payout,
     Pool,
+    User,
     Vote,
     VoteDecision,
 )
@@ -30,15 +32,29 @@ from api.orm import (
 # ---------------------------------------------------------------------------
 # helpers
 # ---------------------------------------------------------------------------
+_slug_seq = count(1)
+
+
 def _pool(session, name="Family", currency="USD", governance_config=None):
-    p = Pool(name=name, currency=currency, governance_config=governance_config or {})
+    p = Pool(
+        slug=f"pool-{next(_slug_seq)}",
+        name=name,
+        currency=currency,
+        governance_config=governance_config or {},
+    )
     session.add(p)
     session.commit()
     return p
 
 
+_user_seq = count(1)
+
+
 def _member(session, pool, name="Ada", role=MemberRole.member):
-    m = Member(pool_id=pool.id, display_name=name, role=role)
+    u = User(email=f"u{next(_user_seq)}@example.test", display_name=name)
+    session.add(u)
+    session.flush()
+    m = Member(user_id=u.id, pool_id=pool.id, display_name=name, role=role)
     session.add(m)
     session.commit()
     return m
@@ -64,7 +80,8 @@ def _claim(session, pool, member, amount=10000, category="medical"):
 def test_all_required_tables_exist(engine):
     expected = {
         "pools",
-        "members",
+        "users",
+        "memberships",
         "contributions",
         "claims",
         "votes",
@@ -86,7 +103,13 @@ def test_pool_persists_and_sets_created_at(session):
 
 
 def test_pool_currency_is_required(session):
-    session.add(Pool(name="x"))
+    session.add(Pool(slug="orphan", name="x"))
+    with pytest.raises(IntegrityError):
+        session.commit()
+
+
+def test_pool_slug_is_required(session):
+    session.add(Pool(name="no-slug", currency="USD"))
     with pytest.raises(IntegrityError):
         session.commit()
 
@@ -99,11 +122,14 @@ def test_pool_governance_config_is_json(session):
 
 
 # ---------------------------------------------------------------------------
-# Member
+# Membership (the per-pool role; class is still importable as ``Member``)
 # ---------------------------------------------------------------------------
 def test_member_default_role_and_status(session):
     p = _pool(session)
-    m = Member(pool_id=p.id, display_name="Bo")
+    u = User(email="bo@example.test", display_name="Bo")
+    session.add(u)
+    session.flush()
+    m = Member(user_id=u.id, pool_id=p.id, display_name="Bo")
     session.add(m)
     session.commit()
     assert m.role == MemberRole.member
@@ -113,14 +139,20 @@ def test_member_default_role_and_status(session):
 
 def test_member_role_enum_rejects_unknown(session):
     p = _pool(session)
+    u = User(email="x@example.test", display_name="x")
+    session.add(u)
+    session.flush()
     with pytest.raises((StatementError, ValueError, LookupError)):
-        m = Member(pool_id=p.id, display_name="x", role="dictator")  # type: ignore[arg-type]
+        m = Member(user_id=u.id, pool_id=p.id, display_name="x", role="dictator")  # type: ignore[arg-type]
         session.add(m)
         session.commit()
 
 
 def test_member_pool_fk_required(session):
-    session.add(Member(display_name="orphan"))
+    u = User(email="orphan@example.test", display_name="orphan")
+    session.add(u)
+    session.flush()
+    session.add(Member(user_id=u.id, display_name="orphan"))
     with pytest.raises(IntegrityError):
         session.commit()
 
@@ -207,7 +239,13 @@ def test_vote_records_decision_and_reason(session):
     p = _pool(session)
     m = _member(session, p)
     c = _claim(session, p, m)
-    v = Vote(claim_id=c.id, member_id=m.id, decision=VoteDecision.approve, reason="ok")
+    v = Vote(
+        pool_id=p.id,
+        claim_id=c.id,
+        member_id=m.id,
+        decision=VoteDecision.approve,
+        reason="ok",
+    )
     session.add(v)
     session.commit()
     assert v.id is not None
@@ -218,7 +256,7 @@ def test_vote_records_decision_and_reason(session):
 def test_vote_requires_existing_claim(session):
     p = _pool(session)
     m = _member(session, p)
-    session.add(Vote(claim_id=999, member_id=m.id, decision=VoteDecision.reject))
+    session.add(Vote(pool_id=p.id, claim_id=999, member_id=m.id, decision=VoteDecision.reject))
     with pytest.raises(IntegrityError):
         session.commit()
 
@@ -230,7 +268,13 @@ def test_payout_links_to_claim(session):
     p = _pool(session)
     m = _member(session, p)
     c = _claim(session, p, m)
-    pay = Payout(claim_id=c.id, amount_paid=10000, recorded_by=m.id, notes="venmo")
+    pay = Payout(
+        pool_id=p.id,
+        claim_id=c.id,
+        amount_paid=10000,
+        recorded_by=m.id,
+        notes="venmo",
+    )
     session.add(pay)
     session.commit()
     assert pay.id is not None

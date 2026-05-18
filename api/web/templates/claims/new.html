@@ -4,7 +4,7 @@
 <h1>Submit a claim</h1>
 <p>Photos help. Anything ambiguous, write it in the description.</p>
 
-<form method="post" action="/claims" enctype="multipart/form-data">
+<form method="post" action="/pools/{{ pool.slug }}/claims" enctype="multipart/form-data">
     <p><label>Amount ({{ currency }})<br>
         <input type="number" step="0.01" min="0" name="amount_dollars" required></label></p>
 
@@ -33,5 +33,5 @@
     <button type="submit">Submit claim</button>
 </form>
 
-<p><a href="/claims">Back to claim list</a></p>
+<p><a href="/pools/{{ pool.slug }}/claims">Back to claim list</a></p>
 {% endblock %}
